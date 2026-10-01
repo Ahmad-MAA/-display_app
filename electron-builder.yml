@@ -1,0 +1,18 @@
+appId: app.projectordesk
+productName: ProjectorDesk
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+win:
+  target:
+    - nsis
+    - portable
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+portable:
+  artifactName: ${productName}-${version}-portable.exe

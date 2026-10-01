@@ -1,0 +1,73 @@
+import type { DisplayInfo, Rect } from './displays';
+
+export interface ContentProtectionStatus {
+  platform: string;
+  /** e.g. "10.0.19045" on Windows. */
+  osVersion: string;
+  /** Windows build number, or null when not on Windows. */
+  windowsBuild: number | null;
+  /** setContentProtection(true) was called on the Output window before it was shown. */
+  requested: boolean;
+  /** BrowserWindow.isContentProtected() after the call. */
+  reportedByElectron: boolean;
+  /**
+   * The OS removes the window from capture entirely (WDA_EXCLUDEFROMCAPTURE,
+   * Windows 10 2004 / build 19041+). Older Windows only blacks it out, which still
+   * produces a recursive (black) mirror when capturing the projector screen.
+   */
+  osSupportsExclusion: boolean;
+  /** Overall verdict: true only if the Output window is fully excluded from capture. */
+  ok: boolean;
+  message: string;
+}
+
+/** What the Output renderer itself sees, used to cross-check placement in physical pixels. */
+export interface OutputViewport {
+  innerWidth: number;
+  innerHeight: number;
+  devicePixelRatio: number;
+  screenWidth: number;
+  screenHeight: number;
+}
+
+export interface PlacementReport {
+  at: string;
+  targetDisplayId: number;
+  targetLabel: string;
+  expected: Rect;
+  /** getBounds() after the final placement step. */
+  actual: Rect;
+  /** Display Electron thinks the window is on after placement. */
+  matchedDisplayId: number;
+  fullScreen: boolean;
+  /** Number of setBounds attempts needed before the bounds matched. */
+  attempts: number;
+  /** A mismatch was detected and corrected at least once. */
+  corrected: boolean;
+  /** Scale factors involved, to make mixed-DPI cases obvious in reports. */
+  targetScaleFactor: number;
+  primaryScaleFactor: number;
+  mixedDpi: boolean;
+  viewport: OutputViewport | null;
+  ok: boolean;
+  problems: string[];
+}
+
+export type LogLevel = 'info' | 'warn' | 'error';
+
+export interface LogEntry {
+  at: string;
+  level: LogLevel;
+  message: string;
+}
+
+/** Full state pushed to the Control Panel whenever something changes. */
+export interface AppState {
+  displays: DisplayInfo[];
+  primaryDisplayId: number;
+  targetDisplayId: number | null;
+  outputVisible: boolean;
+  testPattern: boolean;
+  contentProtection: ContentProtectionStatus | null;
+  placement: PlacementReport | null;
+}
