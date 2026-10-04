@@ -82,6 +82,31 @@ source up in the latest enumeration → `ElectronOutputEngine.setSource(descript
 - Projecting the projector's own screen is refused when capture exclusion is unavailable, and
   allowed with an explanatory notice when it is.
 
+## Follow full screen
+
+Window capture (Windows.Graphics.Capture) is bound to one HWND. Apps that present full screen in a
+_different_ top-level window (WMP hides its main window; VLC and PowerPoint's slide show open new
+ones) therefore lose the content. `FullscreenFollower` (`src/main/fullscreenFollower.ts`):
+
+- While a **window** source is projected and the toggle is on, it polls the window helper's
+  `follow` op every 300 ms: the picked window's state plus every visible window of the same
+  process whose DWM frame covers its whole monitor and that isn't maximized (so a maximized window
+  on a taskbar-less monitor doesn't count). Coordinates are physical; the helper is per-monitor DPI
+  aware.
+- `chooseFollow()` (pure, unit-tested): picked window itself full screen → keep it (Chrome/Edge);
+  another full-screen window of the same process → follow it (PowerPoint `PodiumParent` / Presenter
+  View excluded); else the picked window. `Stabilizer` needs the same decision twice (~600 ms) so
+  enter/exit animations don't flap.
+- The engine keeps two descriptors: `projection.source` (what the presenter picked, shown in the UI)
+  and `effective` (what's captured). `followTo()` / `followBack()` switch `effective` with the
+  normal fade; the display-media handler always grants `effective`.
+- If the followed window's capture errors or is black (exclusive/independent-flip presentation),
+  it falls back once to that monitor's **screen** source (physical rect → `screenToDipRect` →
+  display → screen source); never to the projector's own screen without capture exclusion.
+  "Ended" from a followed window is not "Source closed": the next polls switch back.
+- Every switch, and every capture error on a window source, logs all top-level windows of the app
+  (`inspect` op) for diagnosing other players.
+
 ## Recursive-mirror prevention
 
 `setContentProtection(true)` is called on the Output window right after construction, before it is ever shown (`src/main/contentProtection.ts`). Startup verifies both `isContentProtected()` and that the OS build is 19041 or newer, since only `WDA_EXCLUDEFROMCAPTURE` removes the window from capture. Otherwise the Control Panel shows a persistent warning. Later steps disable "Entire Screen" for the projector display in that case.

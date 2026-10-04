@@ -55,3 +55,16 @@ Same hardware, 2026-10-04.
 | Minimized window stays, greyed, with restore hint; restore brings live thumbnail back | PASS (after fix) | First run FAILED: Electron omits minimized windows. Fixed via window helper (`EnumWindows` + `IsIconic`); re-test listed 3 minimized windows incl. one minimized before launch |
 | Screens tab: both screens, projector one marked                                       | PASS             | `Screen 2 · ASUS VA27EHE · projector`                                                                                                                                          |
 | New app appears within ~2 s; filter narrows                                           | PASS             | —                                                                                                                                                                              |
+
+# Step 4 hardware check — results
+
+Same hardware, 2026-10-04. All five checks PASS: window projection without distortion and live
+preview; switch with fade through black; minimized card restores without stealing focus
+(including a window that was maximized before minimizing: focus handed back); closing the
+projected window → "Source closed"; projecting the ASUS (projector) screen → **no recursive
+mirror**.
+
+Issue found: **Windows Media Player full screen** showed only the window frame, and picking WMP
+while in full screen failed with `NotReadableError`. WMP hides its main window and plays full
+screen in a separate window, which window capture doesn't follow. Fix: "Follow full screen"
+(see ARCHITECTURE.md). Awaiting re-test with WMP, VLC, Chrome/YouTube and PowerPoint.

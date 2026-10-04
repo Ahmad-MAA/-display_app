@@ -88,4 +88,6 @@ export interface AppState {
   /** Times the user made another monitor primary and the Control Panel followed. */
   primarySwaps: number;
   projection: ProjectionInfo;
+  /** Follow the projected app's separate full-screen window (WMP, VLC, slide shows). */
+  followFullscreen: boolean;
 }

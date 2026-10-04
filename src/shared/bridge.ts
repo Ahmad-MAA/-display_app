@@ -18,6 +18,7 @@ export interface ControlApi {
   refreshSources(): Promise<SourceList>;
   onSources(cb: (list: SourceList) => void): () => void;
   project(sourceId: string | null): Promise<ProjectResult>;
+  setFollowFullscreen(on: boolean): Promise<void>;
 }
 
 export interface OutputApi {

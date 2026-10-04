@@ -498,7 +498,11 @@ export function App() {
             />
             <div className="space-y-4">
               <Card title="Now projecting">
-                <NowProjecting projection={state.projection} notice={notice} />
+                <NowProjecting
+                  projection={state.projection}
+                  notice={notice}
+                  followFullscreen={state.followFullscreen}
+                />
               </Card>
               <Card title="Projector">
                 <ProjectorPicker state={state} />

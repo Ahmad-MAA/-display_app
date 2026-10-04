@@ -29,6 +29,29 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'follow-wmp',
+    label:
+      'Follow full screen: project Windows Media Player, press its full-screen button → video stays on the projector (“Following full screen”); exit → back to the WMP window',
+    requires: () => null,
+  },
+  {
+    id: 'follow-vlc',
+    label: 'Follow full screen: same with VLC (double-click the video)',
+    requires: () => null,
+  },
+  {
+    id: 'follow-chrome',
+    label:
+      'Follow full screen: Chrome/Edge YouTube full screen keeps working (same window; no “Following” note expected)',
+    requires: () => null,
+  },
+  {
+    id: 'follow-ppt',
+    label:
+      'Follow full screen (if you have PowerPoint): project PowerPoint, start the slide show on the laptop screen → the slides follow',
+    requires: () => null,
+  },
+  {
     id: 'project-window',
     label:
       'Step 4: click a window → it fills the projector without distortion (black bars if the shape differs) and the “Now projecting” preview is live',

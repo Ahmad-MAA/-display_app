@@ -37,6 +37,7 @@ const api: ControlApi = {
   refreshSources: () => invoke('sources:refresh'),
   onSources: (cb) => on('sources:changed', cb),
   project: (sourceId) => invoke('output:project', sourceId),
+  setFollowFullscreen: (on) => invoke('output:set-follow', on),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

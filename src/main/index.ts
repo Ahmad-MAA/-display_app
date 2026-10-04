@@ -7,14 +7,18 @@ import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
 import { ElectronOutputEngine } from './electronOutputEngine';
+import { FullscreenFollower } from './fullscreenFollower';
 import { OutputWindow } from './outputWindow';
 import { ownHwnds, SourceService } from './sources';
+import { WindowHelper } from './windowHelper';
 import { lockDownNavigation, loadPage, preloadPath } from './windows';
 
 let control: BrowserWindow | null = null;
 let output: OutputWindow | null = null;
 let sources: SourceService | null = null;
 let engine: ElectronOutputEngine | null = null;
+let follower: FullscreenFollower | null = null;
+const windowHelper = new WindowHelper();
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
 let lostDisplayId: number | null = null;
@@ -43,6 +47,7 @@ function state(): AppState {
     extendSuccesses,
     primarySwaps,
     projection: engine?.current ?? IDLE_PROJECTION,
+    followFullscreen: follower?.enabled ?? true,
   };
 }
 
@@ -233,6 +238,7 @@ async function project(sourceId: string | null): Promise<ProjectResult> {
   if (!engine || !sources) return { ok: false, message: 'Not ready yet.' };
   if (sourceId === null) {
     engine.setSource(null);
+    follower?.onProjected(null);
     return { ok: true, message: null };
   }
   const find = () => sources?.latest.sources.find((s) => s.descriptor.sourceId === sourceId);
@@ -267,6 +273,7 @@ async function project(sourceId: string | null): Promise<ProjectResult> {
     await delay(250); // let the restore animation finish so the first frames aren't mid-animation
   }
   engine.setSource(d);
+  follower?.onProjected(d);
   void sources.refresh();
   return {
     ok: true,
@@ -311,8 +318,15 @@ function registerIpc(): void {
     return sources.refresh();
   });
   handle('output:project', controlWc, (sourceId) => project(sourceId));
+  handle('output:set-follow', controlWc, (on) => {
+    follower?.setEnabled(on);
+    pushState();
+  });
   onOutput('output:source-status', outputWc, (st) => {
     engine?.handleStatus(st);
+    if (st.state === 'error' && engine?.current.source?.kind === 'window') {
+      void follower?.diagnose(`capture error ${st.errorName ?? ''}`);
+    }
     if (st.state === 'ended') void sources?.refresh();
   });
   handle('output:replace', controlWc, async () => {
@@ -355,6 +369,18 @@ if (!app.requestSingleInstanceLock()) {
     engine = new ElectronOutputEngine(output, controlWc, () => {
       pushState();
     });
+    follower = new FullscreenFollower(windowHelper, engine, (monitor) => {
+      // Helper rects are physical pixels; Electron displays are DIPs.
+      const dip = process.platform === 'win32' ? screen.screenToDipRect(null, monitor) : monitor;
+      const display = screen.getDisplayMatching(dip);
+      const src = sources?.latest.sources.find(
+        (x) => x.descriptor.kind === 'screen' && x.descriptor.displayId === String(display.id),
+      );
+      if (!src) return null;
+      // Never fall back to the projector's own screen without capture exclusion.
+      if (src.isProjectorScreen && !output?.contentProtection.ok) return null;
+      return { descriptor: src.descriptor, label: src.displayLabel ?? src.descriptor.title };
+    });
     sources = new SourceService(
       {
         ownHwnds: () =>
@@ -366,6 +392,7 @@ if (!app.requestSingleInstanceLock()) {
         projectorDisplayId: () => (output?.isVisible ? targetDisplayId : null),
         displayLabel: (id) => listDisplays().find((d) => String(d.id) === id)?.label ?? null,
       },
+      windowHelper,
       (list) => {
         sendToControl(controlWc(), 'sources:changed', list);
       },
@@ -381,6 +408,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     sources?.dispose();
+    windowHelper.dispose();
     output?.destroy();
   });
 }

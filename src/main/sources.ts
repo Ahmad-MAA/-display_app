@@ -9,7 +9,7 @@ import {
   type SourceMemo,
 } from '@shared/sources';
 import { log } from './log';
-import { WindowHelper } from './windowHelper';
+import type { WindowHelper } from './windowHelper';
 
 export const THUMBNAIL_SIZE = { width: 320, height: 180 } as const;
 const REFRESH_MS = 2000;
@@ -41,7 +41,6 @@ export function ownHwnds(windows: readonly { getMediaSourceId(): string }[]): Se
  * Control Panel is focused (getSources with thumbnails is not free), plus on demand.
  */
 export class SourceService {
-  private readonly helper = new WindowHelper();
   /** Last good thumbnail/icon per HWND, shown while that window is minimized. */
   private readonly memo = new Map<string, SourceMemo>();
   private timer: NodeJS.Timeout | null = null;
@@ -51,6 +50,7 @@ export class SourceService {
 
   constructor(
     private readonly ctx: SourceContext,
+    private readonly helper: WindowHelper,
     private readonly onList: (list: SourceList) => void,
   ) {}
 
@@ -165,6 +165,5 @@ export class SourceService {
 
   dispose(): void {
     this.stopPolling();
-    this.helper.dispose();
   }
 }

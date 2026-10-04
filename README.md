@@ -7,8 +7,8 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 4 (click to project) — awaiting hardware check.** Steps 1–3 passed on hardware
-> ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
+> **Status: step 4 complete; "Follow full screen" awaiting hardware check.** Steps 1–4 passed on
+> hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
 
 ## Setup
 
@@ -62,6 +62,25 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Follow full screen (video players, slide shows)
+
+Some apps don't go full screen in the window you projected. Windows Media Player, VLC and
+PowerPoint's slide show open a **separate** full-screen window (WMP also hides its main window), so
+a plain window capture would show only the old frame, or fail. With **Follow full screen** on (the
+default, in _Now projecting_), ProjectorDesk watches the projected app and:
+
+| App                                                | What happens when you go full screen                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| Windows Media Player, VLC, PowerPoint slide show   | capture switches to the app's full-screen window, then back when you exit |
+| Chrome / Edge (YouTube etc.)                       | nothing to do: the same window goes full screen, capture just continues   |
+| A full-screen window that can't be window-captured | falls back to capturing the whole screen it's on                          |
+
+PowerPoint's Presenter View is never followed, only the slide show. While following, the panel shows
+"Following full screen". Each switch logs every top-level window of the app (Diagnostics → Log /
+Copy report) so other players can be diagnosed.
+
+Hardware check: the four "Follow full screen" items in **Diagnostics → Hardware checks**.
 
 ## Step 4 hardware check
 

@@ -6,8 +6,20 @@ import type { SourceDescriptor } from './outputEngine';
  */
 export type ProjectionState = 'idle' | 'restoring' | 'starting' | 'live' | 'ended' | 'error';
 
+/** What's actually captured while "Follow full screen" redirects away from the picked window. */
+export interface FollowInfo {
+  mode: 'window' | 'screen';
+  /** Title of the followed full-screen window. */
+  title: string;
+  /** Screen fallback: label of the screen being captured instead. */
+  screenLabel: string | null;
+}
+
 export interface ProjectionInfo {
+  /** The source the presenter picked (what the UI shows). */
   source: SourceDescriptor | null;
+  /** Non-null while capture follows the picked app's separate full-screen window. */
+  following: FollowInfo | null;
   state: ProjectionState;
   /** User-facing explanation for 'ended' / 'error', or a hint while live. */
   message: string | null;
@@ -21,6 +33,7 @@ export interface ProjectionInfo {
 
 export const IDLE_PROJECTION: ProjectionInfo = {
   source: null,
+  following: null,
   state: 'idle',
   message: null,
   blank: false,

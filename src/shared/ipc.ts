@@ -24,6 +24,8 @@ export interface ControlInvokeMap {
   'sources:refresh': { args: []; result: SourceList };
   /** Project a source by its Electron id (only the id crosses IPC); null = stop. */
   'output:project': { args: [sourceId: string | null]; result: ProjectResult };
+  /** Toggle "Follow full screen". */
+  'output:set-follow': { args: [on: boolean]; result: void };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -66,6 +68,7 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'sources:get',
   'sources:refresh',
   'output:project',
+  'output:set-follow',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

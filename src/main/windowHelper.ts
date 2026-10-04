@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import type { Rect } from '@shared/displays';
+import type { WinInfo } from '@shared/follow';
 import type { MinimizedWindow } from '@shared/sources';
 import { log } from './log';
 import { WINDOW_HELPER_SCRIPT } from './windowHelper.ps1';
@@ -15,6 +17,45 @@ import { WINDOW_HELPER_SCRIPT } from './windowHelper.ps1';
  * session, logs once, and callers get empty results; enumeration still works without it.
  */
 const REQUEST_TIMEOUT_MS = 5000;
+
+function toRect(v: unknown): Rect | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  const n = (k: string) => (typeof r[k] === 'number' ? r[k] : NaN);
+  const rect = { x: n('x'), y: n('y'), width: n('width'), height: n('height') };
+  return Object.values(rect).every(Number.isFinite) ? rect : null;
+}
+
+/** Validate one window record from the helper; null if malformed. */
+function toWinInfo(v: unknown): WinInfo | null {
+  if (!v || typeof v !== 'object') return null;
+  const w = v as Record<string, unknown>;
+  if (typeof w['hwnd'] !== 'string') return null;
+  const str = (k: string) => (typeof w[k] === 'string' ? w[k] : '');
+  const bool = (k: string) => w[k] === true;
+  const pn = str('processName');
+  return {
+    hwnd: w['hwnd'],
+    pid: typeof w['pid'] === 'number' ? w['pid'] : 0,
+    processName: pn === '' ? null : pn,
+    title: str('title'),
+    className: str('className'),
+    exists: bool('exists'),
+    visible: bool('visible'),
+    minimized: bool('minimized'),
+    maximized: bool('maximized'),
+    cloaked: bool('cloaked'),
+    owned: bool('owned'),
+    fullscreen: bool('fullscreen'),
+    rect: toRect(w['rect']),
+    monitor: toRect(w['monitor']),
+  };
+}
+
+function toWinList(v: unknown): WinInfo[] {
+  if (!Array.isArray(v)) return [];
+  return (v as unknown[]).map(toWinInfo).filter((w): w is WinInfo => w !== null);
+}
 const STARTUP_TIMEOUT_MS = 15000;
 
 type Response = { ok: true; result: unknown } | { ok: false; error: string };
@@ -198,6 +239,20 @@ export class WindowHelper {
     if (!result || typeof result !== 'object') return { restored: false, activated: false };
     const r = result as Record<string, unknown>;
     return { restored: r['restored'] === true, activated: r['activated'] === true };
+  }
+
+  /** The projected window's state plus same-process full-screen windows (null if unavailable). */
+  async follow(hwnd: string): Promise<{ target: WinInfo; fullscreen: WinInfo[] } | null> {
+    const result = await this.request({ op: 'follow', hwnd });
+    if (!result || typeof result !== 'object') return null;
+    const r = result as Record<string, unknown>;
+    const target = toWinInfo(r['target']);
+    return target ? { target, fullscreen: toWinList(r['fullscreen']) } : null;
+  }
+
+  /** Diagnostics: every top-level window of the process owning `hwnd`. */
+  async inspect(hwnd: string): Promise<WinInfo[]> {
+    return toWinList(await this.request({ op: 'inspect', hwnd }));
   }
 
   dispose(): void {

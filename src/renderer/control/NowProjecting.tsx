@@ -65,9 +65,11 @@ const STATE_LABEL: Record<ProjectionInfo['state'], string> = {
 export function NowProjecting({
   projection,
   notice,
+  followFullscreen,
 }: {
   projection: ProjectionInfo;
   notice: { tone: 'warn' | 'bad'; text: string } | null;
+  followFullscreen: boolean;
 }) {
   const p = projection;
   const tone =
@@ -97,6 +99,29 @@ export function NowProjecting({
           Stop
         </button>
       </div>
+      {p.following && (
+        <p className="rounded-md bg-sky-950/60 p-2 text-xs text-sky-200 ring-1 ring-sky-800">
+          <span className="font-semibold">Following full screen. </span>
+          {p.following.mode === 'window'
+            ? `Capturing the app’s full-screen window “${p.following.title}”; switches back when it leaves full screen.`
+            : `The full-screen window can’t be captured on its own, so ${p.following.screenLabel ?? 'its screen'} is captured instead (everything on that screen is shown).`}
+        </p>
+      )}
+      <label className="flex items-start gap-2 text-xs text-slate-300">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-sky-500"
+          checked={followFullscreen}
+          onChange={(e) => void api.setFollowFullscreen(e.target.checked)}
+        />
+        <span>
+          Follow full screen
+          <span className="block text-slate-500">
+            When the projected app opens a separate full-screen window (Windows Media Player, VLC,
+            PowerPoint slide show), project that instead.
+          </span>
+        </span>
+      </label>
       {p.message && (
         <p
           role="alert"
