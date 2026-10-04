@@ -29,6 +29,24 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'step7-restart',
+    label:
+      'Step 7: pick Fill, choose the projector in the dropdown, project a window, close ProjectorDesk and start it again → Fill and the projector are kept; a blue “Resume last projection?” banner offers that window; Resume projects it',
+    requires: () => null,
+  },
+  {
+    id: 'step7-favorites',
+    label:
+      'Step 7: ☆ on a window card → it appears under Favorites; after a restart (and after closing and reopening that app) the favorite still projects it with one click',
+    requires: (_l, s) => (s.settings.favorites.length > 0 ? null : 'star a source first'),
+  },
+  {
+    id: 'step7-hotkeys',
+    label:
+      'Step 7: Settings → Change a hotkey (e.g. Blank → Ctrl+Alt+J) → the new combination works from another app, the old one no longer does, and both survive a restart; Reset to defaults restores Ctrl+Alt+B',
+    requires: () => null,
+  },
+  {
     id: 'follow-wmp-v2',
     label:
       'Follow re-test: project WMP, enter its full screen → the VIDEO plays on the projector; exit → back to the WMP window. Then Copy report (it now has a “Follow full screen trace”)',

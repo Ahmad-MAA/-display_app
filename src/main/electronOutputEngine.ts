@@ -6,7 +6,14 @@ import {
   type OutputDisplay,
 } from '@shared/geometry';
 import { DEFAULT_CONTROLS, type PresenterControls } from '@shared/controls';
-import type { EngineStats, FillMode, SourceDescriptor } from '@shared/outputEngine';
+import type {
+  EngineError,
+  EngineStats,
+  FillMode,
+  OutputEngine,
+  SourceDescriptor,
+  Unsubscribe,
+} from '@shared/outputEngine';
 import { evaluateSession, type SessionSummary } from '@shared/stats';
 import {
   describeCaptureError,
@@ -34,7 +41,14 @@ export type FollowProblem = 'error' | 'blank' | 'ended';
  * Build step 4 covers setSource / source-ended / errors; fill modes, crop, blank,
  * freeze, cursor and stats complete the OutputEngine contract in steps 5–7.
  */
-export class ElectronOutputEngine {
+export class ElectronOutputEngine implements OutputEngine {
+  readonly kind = 'electron' as const;
+  private readonly statsListeners = new Set<(s: EngineStats) => void>();
+  private readonly endedListeners = new Set<(s: SourceDescriptor) => void>();
+  private readonly errorListeners = new Set<(e: EngineError) => void>();
+  /** Placement is owned by main (display handling); start() asks it to place on a display. */
+  placeOn: ((targetDisplayId: number) => Promise<void>) | null = null;
+  hideOutput: (() => void) | null = null;
   private projection: ProjectionInfo = IDLE_PROJECTION;
   private effective: SourceDescriptor | null = null;
   private token = 0;
@@ -181,6 +195,7 @@ export class ElectronOutputEngine {
       refreshRate: r.refreshRate,
     };
     this.stats = stats;
+    for (const cb of this.statsListeners) cb(stats);
     if (this.session?.token === r.token) {
       this.session.last = stats;
       if (stats.medianLatencyMs !== null) this.session.latencies.push(stats.medianLatencyMs);
@@ -324,7 +339,40 @@ export class ElectronOutputEngine {
     this.set({ ...IDLE_PROJECTION, source, state: 'error', message, token: this.token });
   }
 
-  setSource(source: SourceDescriptor | null): void {
+  // ── OutputEngine contract ───────────────────────────────────────────────
+
+  async start(targetDisplayId: number): Promise<void> {
+    await this.placeOn?.(targetDisplayId);
+    this.resync();
+  }
+
+  async stop(): Promise<void> {
+    await this.setSource(null);
+    this.hideOutput?.();
+  }
+
+  onStats(cb: (stats: EngineStats) => void): Unsubscribe {
+    this.statsListeners.add(cb);
+    return () => this.statsListeners.delete(cb);
+  }
+
+  onSourceEnded(cb: (source: SourceDescriptor) => void): Unsubscribe {
+    this.endedListeners.add(cb);
+    return () => this.endedListeners.delete(cb);
+  }
+
+  onError(cb: (error: EngineError) => void): Unsubscribe {
+    this.errorListeners.add(cb);
+    return () => this.errorListeners.delete(cb);
+  }
+
+  private emitError(code: EngineError['code'], message: string): void {
+    for (const cb of this.errorListeners) cb({ code, message });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  setSource(source: SourceDescriptor | null): Promise<void> {
     log(
       'info',
       source
@@ -340,6 +388,7 @@ export class ElectronOutputEngine {
       state: source ? 'starting' : 'idle',
       token: this.token,
     });
+    return Promise.resolve();
   }
 
   /** Capture `target` instead of the picked window (keeps the picked source in the UI). */
@@ -438,6 +487,7 @@ export class ElectronOutputEngine {
         break;
       case 'ended':
         log('warn', `Source ended: "${title}"`);
+        if (src) for (const cb of this.endedListeners) cb(src);
         this.set({
           ...this.projection,
           state: 'ended',
@@ -447,6 +497,10 @@ export class ElectronOutputEngine {
         break;
       case 'error': {
         const message = describeCaptureError(s.errorName, s.message);
+        this.emitError(
+          s.errorName === 'NotAllowedError' ? 'capture-permission-denied' : 'internal',
+          message,
+        );
         log('error', `Capture of "${title}" failed: ${s.errorName ?? ''} ${s.message ?? ''}`);
         this.set({ ...this.projection, state: 'error', blank: false, message });
         break;

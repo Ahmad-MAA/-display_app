@@ -4,6 +4,7 @@ import type { CoveringWindow } from './covering';
 import type { OutputDisplay } from './geometry';
 import type { EngineStats } from './outputEngine';
 import type { ProjectionInfo } from './projection';
+import type { Settings, SourceRef } from './settings';
 import type { SessionSummary } from './stats';
 
 export interface ContentProtectionStatus {
@@ -119,4 +120,7 @@ export interface AppState {
   sessions: SessionSummary[];
   /** Result of the last "is the projected window focused?" check. */
   focusCheck: string | null;
+  settings: Settings;
+  /** "Resume last projection?": the saved source is open again (sourceId to project). */
+  resumeOffer: { ref: SourceRef; sourceId: string } | null;
 }

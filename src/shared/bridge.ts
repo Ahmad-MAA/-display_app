@@ -1,7 +1,7 @@
 /** Shapes of the APIs each preload exposes via contextBridge. Pure types: no Electron imports. */
 import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
 import type { OutputControls, OutputStatsReport, TestPatternInfo } from './ipc';
-import type { PresenterAction } from './controls';
+import type { HotkeyStatus, PresenterAction } from './controls';
 import type { CropRect, OutputDisplay } from './geometry';
 import type { FillMode, SourceDescriptor } from './outputEngine';
 import type { ProjectResult, SourceStatus } from './projection';
@@ -25,6 +25,11 @@ export interface ControlApi {
   setCrop(crop: CropRect | null): Promise<void>;
   action(action: PresenterAction): Promise<void>;
   focusCheck(delaySeconds: number): Promise<void>;
+  toggleFavorite(sourceId: string): Promise<void>;
+  removeFavorite(favoriteId: string): Promise<void>;
+  projectFavorite(favoriteId: string): Promise<ProjectResult>;
+  setHotkeys(accelerators: Record<PresenterAction, string>): Promise<HotkeyStatus[]>;
+  resume(accept: boolean): Promise<ProjectResult>;
 }
 
 export interface OutputApi {

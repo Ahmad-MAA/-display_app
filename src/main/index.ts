@@ -1,8 +1,11 @@
 import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
 import { DEFAULT_CONTROLS, type HotkeyStatus, type PresenterAction } from '@shared/controls';
+import { dispatchCommand } from '@shared/engineProtocol';
 import { DEFAULT_DISPLAY, FILL_MODES, nextFillMode } from '@shared/geometry';
 import { IDLE_PROJECTION, type ProjectResult } from '@shared/projection';
+import { DEFAULT_SETTINGS, matchSource, refOf, sameRef, type SourceRef } from '@shared/settings';
+import { randomUUID } from 'node:crypto';
 import { resolveTarget } from '@shared/targeting';
 import { extendDisplays } from './displaySwitch';
 import { findDisplay, listDisplays } from './displays';
@@ -12,6 +15,7 @@ import { ElectronOutputEngine } from './electronOutputEngine';
 import { CoverWatcher } from './coverWatcher';
 import { registerHotkeys, unregisterHotkeys } from './hotkeys';
 import { recentSessions, recordSession } from './sessionLog';
+import { SettingsStore } from './settingsStore';
 import { FullscreenFollower } from './fullscreenFollower';
 import { OutputWindow } from './outputWindow';
 import { hwndOf, ownHwnds, SourceService } from './sources';
@@ -28,6 +32,11 @@ let hotkeys: HotkeyStatus[] = [];
 /** Emergency hide (Esc / Ctrl+Alt+H): keep the Output hidden until shown again. */
 let outputHiddenByUser = false;
 let focusCheck: string | null = null;
+let settings: SettingsStore | null = null;
+/** Saved last projection that is open again; offered once after startup. */
+let resumeOffer: { ref: SourceRef; sourceId: string } | null = null;
+let resumeHandled = false;
+const startedAt = Date.now();
 let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
@@ -71,6 +80,8 @@ function state(): AppState {
     outputHiddenByUser,
     sessions: recentSessions(),
     focusCheck,
+    settings: settings?.current ?? DEFAULT_SETTINGS,
+    resumeOffer,
   };
 }
 
@@ -80,8 +91,47 @@ function ourWindows(): BrowserWindow[] {
   );
 }
 
+/** Persist what the presenter would expect to find again next time. */
+function persistSettings(): void {
+  if (!settings || !engine) return;
+  const p = engine.current;
+  const live = p.source && (p.state === 'live' || p.state === 'starting');
+  settings.update({
+    preferredDisplayId,
+    fillMode: engine.currentDisplay.fillMode,
+    followFullscreen: follower?.enabled ?? true,
+    ...(live && p.source
+      ? {
+          lastProjection: {
+            kind: p.source.kind,
+            processName: p.source.processName,
+            title: p.source.title,
+            displayId: p.source.displayId,
+          },
+        }
+      : {}),
+  });
+}
+
+/** Offer "Resume last projection" if the saved source shows up within 2 minutes of launch. */
+function checkResume(): void {
+  if (resumeHandled || resumeOffer || !sources || !settings) return;
+  const ref = settings.current.lastProjection;
+  if (!ref || Date.now() - startedAt > 120_000 || engine?.current.source) {
+    resumeHandled = true;
+    return;
+  }
+  const m = matchSource(sources.latest.sources, ref);
+  if (m) {
+    resumeOffer = { ref, sourceId: m.descriptor.sourceId };
+    log('info', `Resume offer: "${m.descriptor.title}" matches the last projection`);
+    pushState();
+  }
+}
+
 function pushState(): void {
   coverWatcher?.setActive(output?.isVisible ?? false);
+  persistSettings();
   sendToControl(controlWc(), 'state:changed', state());
 }
 
@@ -344,20 +394,25 @@ function runAction(a: PresenterAction): void {
   if (!engine) return;
   const c = engine.currentControls;
   switch (a) {
+    // Presenter actions go through the OutputEngine command format (src/shared/engineProtocol.ts):
+    // the same messages a Phase 2 native engine receives over the named pipe.
     case 'blank':
-      engine.blank(!c.blank);
+      void dispatchCommand(engine, { type: 'blank', on: !c.blank });
       break;
     case 'freeze':
-      engine.freeze(!c.freeze);
+      void dispatchCommand(engine, { type: 'freeze', on: !c.freeze });
       break;
     case 'cursor':
-      engine.setCursor(!c.cursor);
+      void dispatchCommand(engine, { type: 'setCursor', on: !c.cursor });
       break;
     case 'stats':
       engine.setStatsOverlay(!c.statsOverlay);
       break;
     case 'fill-cycle':
-      engine.setFillMode(nextFillMode(engine.currentDisplay.fillMode));
+      void dispatchCommand(engine, {
+        type: 'setFillMode',
+        mode: nextFillMode(engine.currentDisplay.fillMode),
+      });
       break;
     case 'next':
       void stepSource(1);
@@ -374,8 +429,10 @@ function runAction(a: PresenterAction): void {
 /** Control Panel picked a source (only its id crosses IPC). */
 async function project(sourceId: string | null): Promise<ProjectResult> {
   if (!engine || !sources) return { ok: false, message: 'Not ready yet.' };
+  resumeOffer = null;
+  resumeHandled = true;
   if (sourceId === null) {
-    engine.setSource(null);
+    await engine.setSource(null);
     follower?.onProjected(null);
     return { ok: true, message: null };
   }
@@ -410,7 +467,7 @@ async function project(sourceId: string | null): Promise<ProjectResult> {
     }
     await delay(250); // let the restore animation finish so the first frames aren't mid-animation
   }
-  engine.setSource(d);
+  await engine.setSource(d);
   follower?.onProjected(d);
   void sources.refresh();
   return {
@@ -463,6 +520,48 @@ function registerIpc(): void {
   });
   handle('output:set-crop', controlWc, (crop) => {
     engine?.setCrop(crop);
+  });
+  handle('favorites:toggle', controlWc, (sourceId) => {
+    if (!settings || !sources) return;
+    const src = sources.latest.sources.find((x) => x.descriptor.sourceId === sourceId);
+    if (!src) return;
+    const ref = refOf(src);
+    const favs = settings.current.favorites;
+    const existing = favs.find((f) => sameRef(f, ref));
+    settings.update({
+      favorites: existing
+        ? favs.filter((f) => f.id !== existing.id)
+        : [...favs, { id: randomUUID(), ...ref }],
+    });
+    log('info', `${existing ? 'Removed' : 'Added'} favorite "${ref.title}"`);
+    pushState();
+  });
+  handle('favorites:remove', controlWc, (id) => {
+    if (!settings) return;
+    settings.update({ favorites: settings.current.favorites.filter((f) => f.id !== id) });
+    pushState();
+  });
+  handle('favorites:project', controlWc, async (id) => {
+    const fav = settings?.current.favorites.find((f) => f.id === id);
+    if (!fav || !sources) return { ok: false, message: 'Favorite not found.' };
+    const m = matchSource((await sources.refresh()).sources, fav);
+    if (!m) return { ok: false, message: `“${fav.title}” isn’t open right now.` };
+    return project(m.descriptor.sourceId);
+  });
+  handle('settings:set-hotkeys', controlWc, (acc) => {
+    if (!settings) return [];
+    settings.update({ hotkeys: { ...settings.current.hotkeys, ...acc } });
+    hotkeys = registerHotkeys(settings.current.hotkeys, runAction);
+    pushState();
+    return hotkeys;
+  });
+  handle('settings:resume', controlWc, async (accept) => {
+    const offer = resumeOffer;
+    resumeOffer = null;
+    resumeHandled = true;
+    pushState();
+    if (!accept || !offer) return { ok: true, message: null };
+    return project(offer.sourceId);
   });
   handle('diagnostics:focus-check', controlWc, (delaySeconds) => {
     const ms = Math.min(Math.max(Number.isFinite(delaySeconds) ? delaySeconds : 0, 0), 30) * 1000;
@@ -524,8 +623,10 @@ if (!app.requestSingleInstanceLock()) {
       lastPlacement = report;
       pushState();
     });
+    settings = new SettingsStore();
+    preferredDisplayId = settings.current.preferredDisplayId;
     windowHelper = new WindowHelper({ scriptDir: app.getPath('userData') });
-    hotkeys = registerHotkeys(runAction);
+    hotkeys = registerHotkeys(settings.current.hotkeys, runAction);
     windowHelper.onUnavailable = () => {
       pushState();
     };
@@ -534,6 +635,17 @@ if (!app.requestSingleInstanceLock()) {
     });
     engine.refreshRate = () =>
       (targetDisplayId !== null ? findDisplay(targetDisplayId)?.displayFrequency : undefined) || 60;
+    engine.placeOn = async () => {
+      await placeOutput('engine start');
+    };
+    engine.hideOutput = () => {
+      output?.hide();
+    };
+    // Restore saved presentation settings; resend once the Output page has loaded.
+    engine.setFillMode(settings.current.fillMode);
+    void output.ready.then(() => {
+      engine?.resync();
+    });
     engine.onSession = (s) => {
       recordSession(s);
       pushState();
@@ -567,9 +679,13 @@ if (!app.requestSingleInstanceLock()) {
       windowHelper,
       (list) => {
         sendToControl(controlWc(), 'sources:changed', list);
+        checkResume();
       },
     );
+    if (!settings.current.followFullscreen) follower.setEnabled(false);
     if (control.isFocused()) sources.startPolling();
+    // Enumerate once at startup even if the panel isn't focused, for the resume offer.
+    void sources.refresh();
     watchDisplays();
     void placeOutput('startup');
   });
@@ -584,6 +700,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     engine?.shutdown();
+    persistSettings();
+    settings?.flush();
     sources?.dispose();
     coverWatcher?.dispose();
     windowHelper?.dispose();

@@ -81,9 +81,10 @@ The same toggles are buttons in _Now projecting_.
 - **Global hotkeys don't take focus.** A video player stays in its own full screen while you
   switch sources (Windows Media Player leaves full screen when you click the Control Panel).
 - **Why Ctrl+Alt:** a global plain "B" would steal that letter from every app you type in.
-  **Why PgUp/PgDn:** many Intel graphics drivers rotate the screen on Ctrl+Alt+Arrow. Hotkeys
-  become configurable in step 7. If another app already owns a combination, Diagnostics →
-  Global hotkeys says so and the button / panel key still works.
+  **Why PgUp/PgDn:** many Intel graphics drivers rotate the screen on Ctrl+Alt+Arrow. Change
+  them under **Settings → Global hotkeys** (each must include Ctrl, Alt or Win). If another app
+  already owns a combination, Settings and Diagnostics say so and the button / panel key still
+  works.
 - **Hide cursor**: not possible in Phase 1. Chromium accepts the request but always draws the
   cursor (seen on hardware: `cursor: always`); after the first attempt the button says so. The
   native engine (`IsCursorCaptureEnabled = false`) fixes this.
@@ -92,6 +93,23 @@ The same toggles are buttons in _Now projecting_.
   median latency above one frame or more than 2% dropped frames are flagged as evidence for the
   native engine (Diagnostics → Recent sessions).
 - **HDR**: if any display reports HDR, a banner explains that Phase 1 output is SDR.
+
+## Settings, favorites and resume
+
+Everything is saved automatically to `%APPDATA%\ProjectorDesk\settings.json`:
+
+- the projector you picked in the dropdown, the fill mode, Follow full screen, the global hotkeys;
+- **Favorites**: ☆ on any card pins it to the Favorites bar above the grid. Window ids change
+  every time an app restarts, so favorites are matched by app (process) and title; a title that
+  merely contains the saved one (e.g. `Deck.pptx - PowerPoint [Read-Only]`) or the only window of
+  that app also matches. A favorite whose app isn't open is greyed out.
+- **Resume last projection**: on the next start, if what was on the projector is open again, a
+  banner offers to project it. Nothing is projected without your click.
+
+A damaged settings file is set aside as `settings.corrupt-<time>.json` and defaults are used. The
+_Output engine_ choice shows the Phase 2 native engine as not available yet.
+
+Step 7 hardware check: the "Step 7" items in **Diagnostics → Hardware checks**.
 
 ## Fill modes and crop
 

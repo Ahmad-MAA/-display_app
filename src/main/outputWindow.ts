@@ -69,7 +69,8 @@ export class OutputWindow {
   /** Bumped by hide(); a placement that sees it change was superseded and stops quietly. */
   private hideGeneration = 0;
   private placing: Promise<void> = Promise.resolve();
-  private readonly ready: Promise<void>;
+  /** Resolves when the Output page has loaded (messages sent earlier would be lost). */
+  readonly ready: Promise<void>;
 
   constructor(private readonly onReport: (r: PlacementReport) => void) {
     this.win = new BrowserWindow({

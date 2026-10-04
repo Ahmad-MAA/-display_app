@@ -5,6 +5,7 @@ import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@sh
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
 import { NowProjecting } from './NowProjecting';
+import { SettingsPanel } from './SettingsPanel';
 import { SourcesPanel, useSources } from './SourcesPanel';
 import { useAppState, useLogs } from './useAppState';
 
@@ -441,7 +442,7 @@ export function App() {
   const state = useAppState();
   const logs = useLogs();
   const sourceList = useSources();
-  const [view, setView] = useState<'sources' | 'diagnostics'>('sources');
+  const [view, setView] = useState<'sources' | 'settings' | 'diagnostics'>('sources');
   const [notice, setNotice] = useState<{ tone: 'warn' | 'bad'; text: string } | null>(null);
   const [checks, setChecksState] = useState(loadChecks);
   const [copied, setCopied] = useState(false);
@@ -537,9 +538,31 @@ export function App() {
           </div>
         )}
         <DisplayBanners state={state} />
+        {state.resumeOffer && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-3 rounded-md border border-sky-700 bg-sky-950/50 p-3 text-sm text-sky-100"
+          >
+            <span className="flex-1">
+              <strong>Resume last projection?</strong> “{state.resumeOffer.ref.title}” is open
+              again.
+            </span>
+            <Button
+              active
+              onClick={() => {
+                void api.resume(true).then((r) => {
+                  if (r.message) setNotice({ tone: r.ok ? 'warn' : 'bad', text: r.message });
+                });
+              }}
+            >
+              Resume
+            </Button>
+            <Button onClick={() => void api.resume(false)}>Dismiss</Button>
+          </div>
+        )}
 
         <nav className="flex gap-4 border-b border-slate-800 text-sm">
-          {(['sources', 'diagnostics'] as const).map((v) => (
+          {(['sources', 'settings', 'diagnostics'] as const).map((v) => (
             <button
               key={v}
               onClick={() => {
@@ -551,7 +574,7 @@ export function App() {
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              {v === 'sources' ? 'Sources' : 'Diagnostics'}
+              {v === 'sources' ? 'Sources' : v === 'settings' ? 'Settings' : 'Diagnostics'}
             </button>
           ))}
         </nav>
@@ -563,6 +586,10 @@ export function App() {
               protection={cp}
               projection={state.projection}
               onPick={(id) => void pick(id)}
+              favorites={state.settings.favorites}
+              onNotice={(text) => {
+                setNotice({ tone: 'warn', text });
+              }}
             />
             <div className="space-y-4">
               <Card title="Now projecting">
@@ -580,6 +607,8 @@ export function App() {
             </div>
           </div>
         )}
+
+        {view === 'settings' && <SettingsPanel state={state} />}
 
         {view === 'diagnostics' && (
           <>

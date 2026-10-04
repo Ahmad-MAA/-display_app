@@ -125,6 +125,25 @@ Output window (`src/renderer/output/display.ts`). Geometry lives in `src/shared/
 - Emergency hide hides the Output window; placement keeps tracking the target but won't show it
   until un-hidden.
 
+## Settings and favorites (step 7)
+
+- `src/shared/settings.ts` holds the schema (`version: 1`) and a tolerant `parseSettings()`:
+  any invalid or unknown field falls back to its default, the engine is forced to `electron` in
+  Phase 1. `src/main/settingsStore.ts` loads at `ready` (an unparsable file is renamed
+  `settings.corrupt-<time>.json`), and writes debounced (500 ms) and atomically (temp file +
+  rename); `before-quit` flushes.
+- Main derives what to save from AppState in `pushState()` (fill mode, follow, preferred
+  display, last projection), so every path that changes state (buttons, keys, global hotkeys,
+  engine events) is persisted without extra plumbing.
+- Sources are referenced by `{ kind, processName, title, displayId }`, never by Chromium's
+  source id or HWND, which change between runs. `matchSource()` ranks exact title > contained
+  title > the only window of that process; screens match by display id.
+- Hotkeys: `settings:set-hotkeys` validates, re-registers all accelerators (`registerHotkeys()`
+  unregisters first and reports duplicates/failures per action) and saves.
+- Engine command routing: presenter actions now go through `dispatchCommand()`
+  (`src/shared/engineProtocol.ts`), the same function that will decode `\\.\pipe\projectordesk`
+  lines for the native engine, so the Phase 1 path exercises the Phase 2 protocol.
+
 ## Window helper launch
 
 The helper script is written to `userData/window-helper.ps1` and started with a short
@@ -176,4 +195,4 @@ ones) therefore lose the content. `FullscreenFollower` (`src/main/fullscreenFoll
 
 ## OutputEngine contract
 
-`src/shared/outputEngine.ts` defines `OutputEngine`, the source descriptor (sourceId + HWND/display id + process name + title) and the versioned JSON envelope (`{ v, seq, msg }`). Phase 2 can carry the same messages over `\\.\pipe\projectordesk`. Step 1 wires up only start/stop and placement. The remaining methods arrive in steps 4–7 without changing the contract's shape.
+`src/shared/outputEngine.ts` defines `OutputEngine`, the source descriptor (sourceId + HWND/display id + process name + title) and the versioned JSON envelope (`{ v, seq, msg }`). Phase 2 can carry the same messages over `\\.\pipe\projectordesk`. All methods are implemented by `ElectronOutputEngine`; presenter actions are routed through `dispatchCommand()` so the wire format is exercised in Phase 1.

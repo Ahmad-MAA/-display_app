@@ -1,4 +1,4 @@
-import { DEFAULT_HOTKEYS, type PresenterAction } from '@shared/controls';
+import { DEFAULT_HOTKEYS, prettyAccelerator, type PresenterAction } from '@shared/controls';
 import type { AppState } from '@shared/diagnostics';
 
 const api = window.projectorDesk;
@@ -7,8 +7,8 @@ function keysFor(action: PresenterAction, hotkeys: AppState['hotkeys']): string 
   const h = DEFAULT_HOTKEYS.find((x) => x.action === action);
   if (!h) return '';
   const global = hotkeys.find((x) => x.action === action);
-  const g = h.global.replace('CommandOrControl', 'Ctrl');
-  return `${h.local} · ${global && !global.registered ? `${g} (taken by another app)` : g}`;
+  const g = prettyAccelerator(global?.accelerator ?? h.global);
+  return `${h.local} · ${global && !global.registered ? `${g} (unavailable)` : g}`;
 }
 
 function Toggle({
@@ -95,7 +95,7 @@ export function PresenterToolbar({ state }: { state: AppState }) {
       )}
       <p className="text-[11px] text-slate-500">
         Keys in this window: B blank · F freeze · M fill mode · S stats · C cursor · Ctrl+←/→ source
-        · Esc hide. From any app: Ctrl+Alt + the same letter, Ctrl+Alt+PgUp/PgDn, Ctrl+Alt+H.
+        · Esc hide. From any app: the global hotkeys (hover a button, or see Settings).
       </p>
     </div>
   );

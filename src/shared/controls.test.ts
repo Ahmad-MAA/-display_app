@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_HOTKEYS, localAction } from './controls';
+import { acceleratorFromEvent, DEFAULT_HOTKEYS, localAction } from './controls';
 
 const key = (
   k: string,
@@ -41,5 +41,61 @@ describe('DEFAULT_HOTKEYS', () => {
   it('has unique accelerators', () => {
     const all = DEFAULT_HOTKEYS.map((h) => h.global);
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+describe('acceleratorFromEvent', () => {
+  const ev = (
+    o: Partial<{
+      key: string;
+      code: string;
+      ctrlKey: boolean;
+      altKey: boolean;
+      shiftKey: boolean;
+      metaKey: boolean;
+    }>,
+  ) => ({
+    key: '',
+    code: '',
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...o,
+  });
+  it('builds Electron accelerators', () => {
+    expect(
+      acceleratorFromEvent(ev({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })),
+    ).toEqual({
+      accelerator: 'CommandOrControl+Alt+B',
+    });
+    expect(
+      acceleratorFromEvent(
+        ev({ key: 'PageDown', code: 'PageDown', ctrlKey: true, shiftKey: true }),
+      ),
+    ).toEqual({
+      accelerator: 'CommandOrControl+Shift+PageDown',
+    });
+    expect(acceleratorFromEvent(ev({ key: 'F9', code: 'F9', altKey: true }))).toEqual({
+      accelerator: 'Alt+F9',
+    });
+  });
+  it('uses the physical key so layouts with AltGr letters still record B', () => {
+    expect(
+      acceleratorFromEvent(ev({ key: '∫', code: 'KeyB', ctrlKey: true, altKey: true })),
+    ).toEqual({
+      accelerator: 'CommandOrControl+Alt+B',
+    });
+  });
+  it('waits while only modifiers are held', () => {
+    expect(
+      acceleratorFromEvent(ev({ key: 'Control', code: 'ControlLeft', ctrlKey: true })),
+    ).toBeNull();
+  });
+  it('refuses bare keys and Shift-only combos', () => {
+    expect(acceleratorFromEvent(ev({ key: 'b', code: 'KeyB' }))).toHaveProperty('error');
+    expect(acceleratorFromEvent(ev({ key: 'B', code: 'KeyB', shiftKey: true }))).toHaveProperty(
+      'error',
+    );
   });
 });

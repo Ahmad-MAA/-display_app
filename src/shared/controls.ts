@@ -109,3 +109,60 @@ export function localAction(e: {
       return null;
   }
 }
+
+const KEY_NAMES: Record<string, string> = {
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  Home: 'Home',
+  End: 'End',
+  Insert: 'Insert',
+  Delete: 'Delete',
+  ' ': 'Space',
+  Escape: 'Escape',
+  Enter: 'Enter',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+};
+
+/**
+ * Turn a keydown into an Electron accelerator for the hotkey recorder, or explain why not.
+ * Global hotkeys need Ctrl, Alt or Win: a bare key (or Shift+key) would be stolen from every
+ * app the presenter types in.
+ */
+export function acceleratorFromEvent(e: {
+  key: string;
+  code: string;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+}): { accelerator: string } | { error: string } | null {
+  if (['Control', 'Alt', 'Shift', 'Meta', 'AltGraph', 'OS'].includes(e.key)) return null; // still holding modifiers
+  let key: string | undefined;
+  if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
+  else if (/^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
+  else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(e.key)) key = e.key;
+  else key = KEY_NAMES[e.key];
+  if (!key) return { error: `“${e.key}” can’t be used in a hotkey` };
+  if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+    return {
+      error: 'Add Ctrl, Alt or Win: a global hotkey without them would steal typing in every app',
+    };
+  }
+  const mods = [
+    e.ctrlKey && 'CommandOrControl',
+    e.altKey && 'Alt',
+    e.shiftKey && 'Shift',
+    e.metaKey && 'Super',
+  ].filter(Boolean);
+  return { accelerator: [...mods, key].join('+') };
+}
+
+/** "CommandOrControl+Alt+B" → "Ctrl+Alt+B" for display. */
+export function prettyAccelerator(a: string): string {
+  return a.replace('CommandOrControl', 'Ctrl').replace('Super', 'Win');
+}

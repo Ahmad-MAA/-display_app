@@ -42,6 +42,11 @@ const api: ControlApi = {
   setCrop: (crop) => invoke('output:set-crop', crop),
   action: (a) => invoke('output:action', a),
   focusCheck: (delaySeconds) => invoke('diagnostics:focus-check', delaySeconds),
+  toggleFavorite: (sourceId) => invoke('favorites:toggle', sourceId),
+  removeFavorite: (id) => invoke('favorites:remove', id),
+  projectFavorite: (id) => invoke('favorites:project', id),
+  setHotkeys: (acc) => invoke('settings:set-hotkeys', acc),
+  resume: (accept) => invoke('settings:resume', accept),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ContentProtectionStatus } from '@shared/diagnostics';
 import type { ProjectionInfo } from '@shared/projection';
+import { matchSource, refOf, sameRef, type Favorite } from '@shared/settings';
 import { filterSources, type CaptureSource, type SourceList } from '@shared/sources';
 
 const api = window.projectorDesk;
@@ -157,16 +158,68 @@ function SourceCard({
   );
 }
 
+function FavoritesBar({
+  favorites,
+  list,
+  onNotice,
+}: {
+  favorites: readonly Favorite[];
+  list: SourceList | null;
+  onNotice: (text: string) => void;
+}) {
+  if (favorites.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-slate-500">Favorites:</span>
+      {favorites.map((f) => {
+        const open = list ? matchSource(list.sources, f) : null;
+        return (
+          <span
+            key={f.id}
+            className={`flex items-center rounded-full text-xs ring-1 ${
+              open ? 'bg-slate-800 ring-amber-600/60' : 'bg-slate-900 text-slate-500 ring-slate-800'
+            }`}
+          >
+            <button
+              className="max-w-56 truncate py-1 pr-1 pl-2.5 hover:text-white disabled:cursor-default"
+              disabled={!open}
+              title={open ? `Project “${open.descriptor.title}”` : `“${f.title}” isn’t open`}
+              onClick={() => {
+                void api.projectFavorite(f.id).then((r) => {
+                  if (!r.ok && r.message) onNotice(r.message);
+                });
+              }}
+            >
+              ★ {f.title}
+            </button>
+            <button
+              className="px-2 py-1 text-slate-500 hover:text-rose-300"
+              title="Remove favorite"
+              onClick={() => void api.removeFavorite(f.id)}
+            >
+              ×
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SourcesPanel({
   list,
   protection,
   projection,
   onPick,
+  favorites,
+  onNotice,
 }: {
   list: SourceList | null;
   protection: ContentProtectionStatus | null;
   projection: ProjectionInfo;
   onPick: (sourceId: string) => void;
+  favorites: readonly Favorite[];
+  onNotice: (text: string) => void;
 }) {
   const now = useNow(1000);
   const [tab, setTab] = useState<'window' | 'screen'>('window');
@@ -199,6 +252,7 @@ export function SourcesPanel({
 
   return (
     <section className="space-y-3">
+      <FavoritesBar favorites={favorites} list={list} onNotice={onNotice} />
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" className="flex rounded-md bg-slate-900 p-0.5 ring-1 ring-slate-800">
           {(['window', 'screen'] as const).map((k) => (
@@ -262,13 +316,29 @@ export function SourcesPanel({
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
         {shown.map((s) => (
-          <SourceCard
-            key={s.descriptor.sourceId}
-            source={s}
-            protectionOk={protectionOk}
-            projection={projection}
-            onPick={onPick}
-          />
+          <div key={s.descriptor.sourceId} className="relative">
+            <SourceCard
+              source={s}
+              protectionOk={protectionOk}
+              projection={projection}
+              onPick={onPick}
+            />
+            {(() => {
+              const fav = favorites.some((f) => sameRef(f, refOf(s)));
+              return (
+                <button
+                  className={`absolute right-2 bottom-2 rounded px-1.5 text-base leading-6 ${
+                    fav ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
+                  }`}
+                  title={fav ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-pressed={fav}
+                  onClick={() => void api.toggleFavorite(s.descriptor.sourceId)}
+                >
+                  {fav ? '★' : '☆'}
+                </button>
+              );
+            })()}
+          </div>
         ))}
       </div>
     </section>

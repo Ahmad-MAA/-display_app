@@ -137,3 +137,10 @@ full screen).
   The skip is removed; the follower now logs every change in what it sees (followed or not), so
   an empty trace can't hide a rejected candidate again. Re-test needed.
 - Caret focus check: untested.
+
+# Step 7 (settings, favorites, configurable hotkeys)
+
+Container end-to-end run (Linux, Xvfb): Fill + a favorite + Blank rebound to Ctrl+Alt+J were
+written to `settings.json`; after a restart Fill, the favorite, the hotkey and the Resume banner
+were all back, Resume projected the window, and Ctrl+Alt+J blanked from outside the panel.
+Closing the Control Panel quits the app within ~2 s. Hardware: the "Step 7" items, pending.

@@ -9,6 +9,7 @@ import type { CropRect, OutputDisplay } from './geometry';
 import type { EngineStats, FillMode, SourceDescriptor } from './outputEngine';
 import type { ProjectResult, SourceStatus } from './projection';
 import type { SourceList } from './sources';
+import type { HotkeyStatus } from './controls';
 
 /** Control Panel → main, request/response (ipcRenderer.invoke / ipcMain.handle). */
 export interface ControlInvokeMap {
@@ -35,6 +36,18 @@ export interface ControlInvokeMap {
   'output:action': { args: [action: PresenterAction]; result: void };
   /** Wait `delaySeconds`, then check whether the projected window thinks it has focus. */
   'diagnostics:focus-check': { args: [delaySeconds: number]; result: void };
+  /** Add or remove the source as a favorite (matched later by process + title). */
+  'favorites:toggle': { args: [sourceId: string]; result: void };
+  'favorites:remove': { args: [favoriteId: string]; result: void };
+  /** Project the open source that matches a favorite. */
+  'favorites:project': { args: [favoriteId: string]; result: ProjectResult };
+  /** Replace the global hotkeys; returns what could be registered. */
+  'settings:set-hotkeys': {
+    args: [accelerators: Record<PresenterAction, string>];
+    result: HotkeyStatus[];
+  };
+  /** Accept (true) or dismiss (false) the "Resume last projection" offer. */
+  'settings:resume': { args: [accept: boolean]; result: ProjectResult };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -98,6 +111,11 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'output:set-crop',
   'output:action',
   'diagnostics:focus-check',
+  'favorites:toggle',
+  'favorites:remove',
+  'favorites:project',
+  'settings:set-hotkeys',
+  'settings:resume',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [
