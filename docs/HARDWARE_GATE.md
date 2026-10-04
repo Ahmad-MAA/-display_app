@@ -162,4 +162,9 @@ reloaded, the projection went live again by itself (~2 s), banner shown. Killing
 times within a minute → third crash within the window stops retries: Output hidden, Control
 Panel dialog offers "Restart ProjectorDesk". `electron-builder --win` (Wine) produced
 `ProjectorDesk-Setup-0.1.0.exe` and `ProjectorDesk-0.1.0-portable.exe` (~111 MB each).
-Hardware: the "Step 8" items, pending.
+Hardware (2026-10-04): installer installed, started from the Start menu, projected,
+uninstalled → PASS. Crop editor → PASS. VLC follow full screen → PASS. Portable exe →
+**blocked by the PC's security** ("publisher couldn't be verified", no Run anyway): a
+code-signing issue, not an app bug. Documented in the README (Install, Code signing).
+
+Phase 1 complete.

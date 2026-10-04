@@ -17,6 +17,13 @@ win:
     - target: portable
       arch: x64
   requestedExecutionLevel: asInvoker
+  # Code signing with Azure Trusted Signing (README → Code signing). Credentials come from
+  # AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET; never put them in this file.
+  # azureSignOptions:
+  #   publisherName: Your Name or Company
+  #   endpoint: https://eus.codesigning.azure.net/
+  #   codeSigningAccountName: your-account-name
+  #   certificateProfileName: your-profile-name
 nsis:
   artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: false

@@ -11,10 +11,9 @@ Phase 1 (this repository) is Electron + TypeScript + React/Tailwind. Phase 2, a 
 Windows.Graphics.Capture engine for sub-frame latency, HDR and cursor hiding, is planned in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#phase-2-native-output-engine).
 
-> **Status: Phase 1, build step 8 (packaging, error handling) awaiting its hardware check.**
-> Steps 1–7 passed on hardware (Windows 11, 125 % laptop panel + 1080p monitor) except two
-> items not yet run: the crop editor and VLC full screen. Results:
-> [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md).
+> **Status: Phase 1 complete (build steps 1–8), verified on hardware** (Windows 11, 125 % laptop
+> panel + 1080p monitor). Open item: the builds are unsigned (see [Code signing](#code-signing)).
+> Results: [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md).
 
 ## Install
 
@@ -26,8 +25,15 @@ Two builds (see [Building the installer](#building-the-installer)):
   Start menu and desktop shortcuts, uninstalls from Settings → Apps.
 - **`ProjectorDesk-<version>-portable.exe`**: runs without installing, e.g. from a USB stick.
 
-The builds are not code-signed, so Windows SmartScreen says "Windows protected your PC" on first
-run: click **More info → Run anyway**.
+**Unsigned builds.** Until releases are [code-signed](#code-signing), Windows may refuse to run
+them:
+
+- **SmartScreen** says "Windows protected your PC": click **More info → Run anyway**.
+- **Smart App Control** (Windows 11) and some **OEM or antivirus security** tools can block an
+  unsigned app **outright**, with no "Run anyway" option ("publisher couldn't be verified"). Seen
+  in testing: the installer ran, the portable exe was blocked. Don't turn Smart App Control off
+  to get around it (on many Windows versions it can't be turned back on without reinstalling
+  Windows); sign the builds instead.
 
 Settings, favorites and logs live in `%APPDATA%\ProjectorDesk` and survive upgrades and
 uninstalling.
@@ -220,8 +226,72 @@ scripts at the end of the install; review them with `npm install-scripts ls` and
 
 Configuration is in `electron-builder.yml`; the icon is `resources/icon.ico`. There are no native
 modules and no runtime npm dependencies: the package contains only the compiled `out/` folder.
-To sign, set electron-builder's `CSC_LINK` / `CSC_KEY_PASSWORD` environment variables. Building
-the NSIS installer on Linux/macOS needs Wine (including 32-bit Wine on Linux).
+Building the NSIS installer on Linux/macOS needs Wine (including 32-bit Wine on Linux); signing
+(below) needs Windows.
+
+### Code signing
+
+Unsigned builds can be blocked outright (see [Install](#install)). The recommended route is
+**Azure Trusted Signing** (Microsoft's managed code-signing service; newer Azure documentation may
+call it _Artifact Signing_), which electron-builder supports natively through
+`win.azureSignOptions`. Its certificates are trusted by Windows, SmartScreen and Smart App
+Control, and there is no hardware token to manage.
+
+**One-time Azure setup** (Azure portal; check Microsoft's current eligibility rules first:
+organizations need a verifiable business history, and individual developers are accepted only
+in some countries):
+
+1. In your subscription, register the resource provider **Microsoft.CodeSigning**.
+2. Create a **Trusted Signing account** (pick a region and the Basic tier). Note its **account
+   name** and **endpoint**, e.g. `https://eus.codesigning.azure.net/` for East US.
+3. In the account, complete **Identity validation** (Public Trust) for your organization or
+   yourself. This takes from hours to days.
+4. Create a **Certificate profile** of type _Public Trust_ linked to that validation. Note its
+   **name**. Its subject CN is the publisher name Windows will show.
+5. In **Microsoft Entra ID → App registrations**, register an app (e.g. `projectordesk-signing`)
+   and create a **client secret**. Note the tenant ID, client (application) ID and the secret.
+6. On the Trusted Signing account, **Access control (IAM) → Add role assignment →
+   "Trusted Signing Certificate Profile Signer"** for that app registration.
+
+**Configure the build.** Add to `electron-builder.yml` under `win:` (none of these values are
+secret):
+
+```yaml
+win:
+  azureSignOptions:
+    publisherName: Your Name or Company # exactly the certificate's CN
+    endpoint: https://eus.codesigning.azure.net/
+    codeSigningAccountName: your-account-name
+    certificateProfileName: your-profile-name
+```
+
+Then build on Windows with the credentials in the environment. Never commit them; in CI use
+repository secrets:
+
+```powershell
+$env:AZURE_TENANT_ID = "<tenant id>"
+$env:AZURE_CLIENT_ID = "<app registration client id>"
+$env:AZURE_CLIENT_SECRET = "<client secret>"
+npm run dist:win
+```
+
+electron-builder installs the `TrustedSigning` PowerShell module on first use and signs the app
+exe, the installer, its uninstaller and the portable exe, with a SHA-256 RFC 3161 timestamp
+(`http://timestamp.acs.microsoft.com`). Trusted Signing certificates live only a few days. The
+timestamp keeps signatures valid after the certificate expires, so don't disable it.
+
+**Check the result:** right-click the exe → Properties → **Digital Signatures**, or
+
+```powershell
+Get-AuthenticodeSignature .\dist\ProjectorDesk-Setup-0.1.0.exe | Format-List Status, SignerCertificate
+```
+
+`Status` must be `Valid`. SmartScreen reputation still builds up over the first downloads, but
+the "publisher couldn't be verified" block goes away.
+
+Alternative: a conventional OV/EV certificate works through electron-builder's
+`win.signtoolOptions` (or `CSC_LINK` / `CSC_KEY_PASSWORD` for a `.pfx`). Since 2023 these keys
+must be on a hardware token or cloud HSM, which is why Trusted Signing is simpler here.
 
 ### Project layout
 
