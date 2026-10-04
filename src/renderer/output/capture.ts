@@ -16,9 +16,12 @@ const BLANK_CHECK_MS = 2000;
 
 const api = window.projectorOutput;
 const video = document.getElementById('video') as HTMLVideoElement;
+const stage = document.getElementById('stage') as HTMLDivElement;
+// 160×90 and every pixel checked: a mostly-black terminal with a few lines of text is
+// NOT blank (a coarser probe flagged cmd.exe on hardware).
 const probe = document.createElement('canvas');
-probe.width = 64;
-probe.height = 36;
+probe.width = 160;
+probe.height = 90;
 const probeCtx = probe.getContext('2d', { willReadFrequently: true });
 
 let latestToken = 0;
@@ -41,13 +44,16 @@ function report(s: Partial<SourceStatus> & Pick<SourceStatus, 'token' | 'state'>
 }
 
 async function fadeOut(): Promise<void> {
-  if (video.style.opacity === '0') return;
-  video.style.opacity = '0';
+  if (stage.style.opacity === '0' || stage.style.opacity === '') {
+    stage.style.opacity = '0';
+    return;
+  }
+  stage.style.opacity = '0';
   await sleep(FADE_MS);
 }
 
 function fadeIn(): void {
-  video.style.opacity = '1';
+  stage.style.opacity = '1';
 }
 
 function stopStream(): void {
@@ -73,7 +79,7 @@ function frameIsBlank(): boolean {
   if (!probeCtx || video.videoWidth === 0) return true;
   probeCtx.drawImage(video, 0, 0, probe.width, probe.height);
   const { data } = probeCtx.getImageData(0, 0, probe.width, probe.height);
-  return isBlankBitmap(data, probe.width, probe.height);
+  return isBlankBitmap(data, probe.width, probe.height, 12, 1);
 }
 
 function liveStatus(token: number, blank: boolean): void {
@@ -127,7 +133,7 @@ async function switchTo(token: number, source: SourceDescriptor | null): Promise
   track?.addEventListener('ended', () => {
     if (stream !== s) return;
     // Source window closed (or capture revoked): go black and tell main.
-    video.style.opacity = '0';
+    stage.style.opacity = '0';
     stopStream();
     report({ token, state: 'ended' });
   });

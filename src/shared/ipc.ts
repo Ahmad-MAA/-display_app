@@ -4,7 +4,8 @@
  */
 import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
 import type { DisplayInfo } from './displays';
-import type { SourceDescriptor } from './outputEngine';
+import type { CropRect, OutputDisplay } from './geometry';
+import type { FillMode, SourceDescriptor } from './outputEngine';
 import type { ProjectResult, SourceStatus } from './projection';
 import type { SourceList } from './sources';
 
@@ -26,6 +27,9 @@ export interface ControlInvokeMap {
   'output:project': { args: [sourceId: string | null]; result: ProjectResult };
   /** Toggle "Follow full screen". */
   'output:set-follow': { args: [on: boolean]; result: void };
+  'output:set-fill-mode': { args: [mode: FillMode]; result: void };
+  /** Normalized crop (0..1 of the source frame); null = whole frame. */
+  'output:set-crop': { args: [crop: CropRect | null]; result: void };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -45,6 +49,8 @@ export interface OutputEventMap {
   'output:test-pattern': TestPatternInfo | null;
   /** Start capturing this source (null = go black and stop capturing). */
   'output:set-source': { token: number; source: SourceDescriptor | null };
+  /** Fill mode and crop for the Output's presentation. */
+  'output:display': OutputDisplay;
 }
 
 /** Output window → main, fire-and-forget (ipcRenderer.send / ipcMain.on). */
@@ -69,6 +75,8 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'sources:refresh',
   'output:project',
   'output:set-follow',
+  'output:set-fill-mode',
+  'output:set-crop',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

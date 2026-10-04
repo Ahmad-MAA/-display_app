@@ -29,6 +29,36 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'fill-modes',
+    label:
+      'Step 5: Fit / Fill / Stretch on a source whose shape differs from the projector: Fit = black bars, Fill = edges trimmed, Stretch = distorted to fill',
+    requires: (_l, s) => (s.projection.state === 'live' ? null : 'project something first'),
+  },
+  {
+    id: 'crop',
+    label:
+      'Step 5: Crop… → drag a region → Apply: only that region fills the projector (shape kept, per fill mode); preview outlines it; Clear crop restores the whole picture',
+    requires: (_l, s) => (s.display.crop ? null : 'apply a crop first'),
+  },
+  {
+    id: 'crop-reset',
+    label:
+      'Step 5: pick another source while cropped → new source shows uncropped; fill mode is kept',
+    requires: () => null,
+  },
+  {
+    id: 'blank-terminal',
+    label:
+      'Step 5: project a mostly-black terminal (cmd / Windows Terminal) → NO “showing black” warning',
+    requires: () => null,
+  },
+  {
+    id: 'covering-warning',
+    label:
+      'Covering warning: start a WPS/PowerPoint slide show WITH Presenter View → red “Another window is covering the projector” appears; ends → warning clears',
+    requires: () => null,
+  },
+  {
     id: 'follow-wmp',
     label:
       'Follow full screen: project Windows Media Player, press its full-screen button → video stays on the projector (“Following full screen”); exit → back to the WMP window',

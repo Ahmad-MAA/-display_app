@@ -1,5 +1,6 @@
 import type { DisplayInfo, Rect } from './displays';
 import type { CoveringWindow } from './covering';
+import type { OutputDisplay } from './geometry';
 import type { ProjectionInfo } from './projection';
 
 export interface ContentProtectionStatus {
@@ -93,4 +94,6 @@ export interface AppState {
   followFullscreen: boolean;
   /** Other apps' windows above the Output on the projector display (empty = fine). */
   coveredBy: CoveringWindow[];
+  /** Fill mode + crop currently applied on the Output. */
+  display: OutputDisplay;
 }

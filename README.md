@@ -7,8 +7,8 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 4 complete; "Follow full screen" awaiting hardware check.** Steps 1–4 passed on
-> hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
+> **Status: step 5 (fill modes & crop) — awaiting hardware check.** Steps 1–4 and Follow full
+> screen passed on hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
 
 ## Setup
 
@@ -62,6 +62,21 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Fill modes and crop
+
+In **Now projecting**:
+
+- **Fit** (default): the whole picture, black bars where its shape differs from the projector.
+- **Fill**: fills the projector, trimming the edges that don't fit.
+- **Stretch**: fills the projector, distorting the shape.
+- **Crop…**: drag over a larger live view of the source to pick the region the audience sees, then
+  **Apply crop**. The region keeps its shape and is placed by the fill mode (Fit = bars). The small
+  preview outlines the crop; **Clear crop** shows the whole picture again. A crop belongs to one
+  source and is cleared when you pick another; the fill mode carries over.
+
+Step 5 hardware check: the "Step 5" items (plus the covering-warning item) in **Diagnostics →
+Hardware checks**.
 
 ## Follow full screen (video players, slide shows)
 

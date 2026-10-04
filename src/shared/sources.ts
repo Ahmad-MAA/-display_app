@@ -72,9 +72,10 @@ export function isBlankBitmap(
   width: number,
   height: number,
   threshold = 12,
+  sampleStep?: number,
 ): boolean {
   if (width <= 0 || height <= 0 || data.length < width * height * 4) return true;
-  const step = Math.max(1, Math.floor(Math.min(width, height) / 24));
+  const step = sampleStep ?? Math.max(1, Math.floor(Math.min(width, height) / 24));
   for (let y = 0; y < height; y += step) {
     for (let x = 0; x < width; x += step) {
       const i = (y * width + x) * 4;

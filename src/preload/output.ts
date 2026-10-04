@@ -28,6 +28,7 @@ const api: OutputApi = {
     send('output:viewport', v);
   },
   onSetSource: (cb) => on('output:set-source', cb),
+  onDisplay: (cb) => on('output:display', cb),
   reportSourceStatus: (status) => {
     send('output:source-status', status);
   },

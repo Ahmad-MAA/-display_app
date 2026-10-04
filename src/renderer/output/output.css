@@ -10,15 +10,38 @@ body {
   user-select: none;
 }
 
-#video {
+/* Video + crop canvas fade together: crossfade through black on source switch. */
+#stage {
   position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 150ms linear;
+}
+
+#video,
+#crop {
+  position: absolute;
   inset: 0;
   width: 100vw;
   height: 100vh;
-  object-fit: contain; /* letterbox: no distortion */
   background: #000;
-  opacity: 0;
-  transition: opacity 150ms linear; /* crossfade through black on source switch */
+}
+
+/* Fill modes without crop: plain CSS object-fit. */
+#video.fit {
+  object-fit: contain; /* letterbox: no distortion */
+}
+#video.fill {
+  object-fit: cover;
+}
+#video.stretch {
+  object-fit: fill;
+}
+
+/* With a crop, the canvas (drawn per video frame) sits on top of the video. */
+#crop[hidden] {
+  display: none;
 }
 
 /* Placement test pattern: shows whether the window covers the display exactly. */

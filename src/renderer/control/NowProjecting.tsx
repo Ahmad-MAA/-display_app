@@ -1,45 +1,24 @@
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
+import type { OutputDisplay } from '@shared/geometry';
+import type { FillMode } from '@shared/outputEngine';
 import type { ProjectionInfo } from '@shared/projection';
+import { CropEditor, CropOutline, useContentBox, useProjectedStream } from './CropEditor';
 
 const api = window.projectorDesk;
 
 /**
  * Low-res (≤480×270, 10 fps) second capture of the projected source, so the presenter
- * sees what the audience sees without looking at the projector. main's display-media
- * handler hands the Control Panel the same source as the Output window.
+ * sees what's on the projector without looking at it. Shows the full source frame with
+ * the active crop outlined.
  */
-function Preview({ projection }: { projection: ProjectionInfo }) {
-  const ref = useRef<HTMLVideoElement>(null);
+function Preview({ projection, display }: { projection: ProjectionInfo; display: OutputDisplay }) {
   const active = projection.source !== null && projection.state === 'live';
-  useEffect(() => {
-    const el = ref.current;
-    if (!active || !el) return;
-    let cancelled = false;
-    let stream: MediaStream | null = null;
-    navigator.mediaDevices
-      .getDisplayMedia({
-        video: { frameRate: { max: 10 }, width: { max: 480 }, height: { max: 270 } },
-        audio: false,
-      })
-      .then((s) => {
-        if (cancelled) {
-          for (const t of s.getTracks()) t.stop();
-          return;
-        }
-        stream = s;
-        el.srcObject = s;
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      if (stream) for (const t of stream.getTracks()) t.stop();
-      el.srcObject = null;
-    };
-  }, [active, projection.token]);
-
+  const ref = useProjectedStream(active, projection.token, 480, 270);
+  const box = useContentBox(ref);
   return (
     <div className="relative aspect-video overflow-hidden rounded-md bg-black ring-1 ring-slate-800">
       <video ref={ref} autoPlay muted playsInline className="h-full w-full object-contain" />
+      {active && box && display.crop && <CropOutline box={box} crop={display.crop} />}
       {!active && (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
           {projection.state === 'restoring'
@@ -62,16 +41,81 @@ const STATE_LABEL: Record<ProjectionInfo['state'], string> = {
   error: 'Failed',
 };
 
+const FILL_LABEL: Record<FillMode, { label: string; hint: string }> = {
+  fit: { label: 'Fit', hint: 'Whole picture, black bars if the shape differs' },
+  fill: { label: 'Fill', hint: 'Fill the screen, trimming edges' },
+  stretch: { label: 'Stretch', hint: 'Fill the screen, distorting the shape' },
+};
+
+function DisplayControls({
+  display,
+  canCrop,
+  onCrop,
+}: {
+  display: OutputDisplay;
+  canCrop: boolean;
+  onCrop: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div
+        role="radiogroup"
+        aria-label="Fill mode"
+        className="flex rounded-md bg-slate-900 p-0.5 ring-1 ring-slate-800"
+      >
+        {(['fit', 'fill', 'stretch'] as const).map((m) => (
+          <button
+            key={m}
+            role="radio"
+            aria-checked={display.fillMode === m}
+            title={FILL_LABEL[m].hint}
+            onClick={() => void api.setFillMode(m)}
+            className={`rounded px-2.5 py-1 text-xs ${
+              display.fillMode === m
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {FILL_LABEL[m].label}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={onCrop}
+        disabled={!canCrop}
+        className={`rounded-md px-2.5 py-1 text-xs ring-1 disabled:opacity-40 ${
+          display.crop
+            ? 'bg-sky-600 text-white ring-sky-500 hover:bg-sky-500'
+            : 'bg-slate-800 ring-slate-700 hover:bg-slate-700'
+        }`}
+      >
+        {display.crop ? 'Crop: on' : 'Crop…'}
+      </button>
+      {display.crop && (
+        <button
+          onClick={() => void api.setCrop(null)}
+          className="rounded-md bg-slate-800 px-2.5 py-1 text-xs ring-1 ring-slate-700 hover:bg-slate-700"
+        >
+          Clear crop
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function NowProjecting({
   projection,
   notice,
   followFullscreen,
+  display,
 }: {
   projection: ProjectionInfo;
   notice: { tone: 'warn' | 'bad'; text: string } | null;
   followFullscreen: boolean;
+  display: OutputDisplay;
 }) {
   const p = projection;
+  const [cropping, setCropping] = useState(false);
   const tone =
     p.state === 'live' && !p.blank
       ? 'text-emerald-300'
@@ -80,10 +124,10 @@ export function NowProjecting({
         : 'text-amber-300';
   return (
     <div className="space-y-2 text-sm">
-      <Preview projection={p} />
+      <Preview projection={p} display={display} />
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className={`text-xs font-semibold uppercase tracking-wide ${tone}`}>
+          <p className={`text-xs font-semibold tracking-wide uppercase ${tone}`}>
             {STATE_LABEL[p.state]}
             {p.state === 'live' && p.width && p.height ? ` · ${p.width}×${p.height}` : ''}
           </p>
@@ -99,6 +143,22 @@ export function NowProjecting({
           Stop
         </button>
       </div>
+      <DisplayControls
+        display={display}
+        canCrop={p.state === 'live'}
+        onCrop={() => {
+          setCropping(true);
+        }}
+      />
+      {cropping && (
+        <CropEditor
+          token={p.token}
+          crop={display.crop}
+          onClose={() => {
+            setCropping(false);
+          }}
+        />
+      )}
       {p.following && (
         <p className="rounded-md bg-sky-950/60 p-2 text-xs text-sky-200 ring-1 ring-sky-800">
           <span className="font-semibold">Following full screen. </span>

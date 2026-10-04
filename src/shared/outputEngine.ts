@@ -8,10 +8,11 @@
  *
  * Keep everything here serializable: the message types below are the wire format.
  *
- * NOTE (build step 1): only `start` / `stop` are wired up so far. The remaining
- * methods are part of the contract now so later steps don't change its shape.
+ * Implemented so far by ElectronOutputEngine: setSource, setFillMode, setCrop, source
+ * ended / errors. blank, freeze, cursor and stats arrive in step 6; the formal
+ * `implements OutputEngine` + named-pipe transport in step 7.
  */
-import type { Rect } from './displays';
+import type { CropRect } from './geometry';
 
 export const ENGINE_PROTOCOL_VERSION = 1;
 export const NATIVE_ENGINE_PIPE = '\\\\.\\pipe\\projectordesk';
@@ -67,7 +68,8 @@ export interface OutputEngine {
   stop(): Promise<void>;
   setSource(source: SourceDescriptor | null): Promise<void>;
   setFillMode(mode: FillMode): void;
-  setCrop(rect: Rect | null): void;
+  /** Crop in source-normalized coordinates (0..1 of the frame); null = whole frame. */
+  setCrop(rect: CropRect | null): void;
   blank(on: boolean): void;
   freeze(on: boolean): void;
   setCursor(on: boolean): void;
@@ -82,7 +84,7 @@ export type EngineCommand =
   | { type: 'stop' }
   | { type: 'setSource'; source: SourceDescriptor | null }
   | { type: 'setFillMode'; mode: FillMode }
-  | { type: 'setCrop'; rect: Rect | null }
+  | { type: 'setCrop'; rect: CropRect | null }
   | { type: 'blank'; on: boolean }
   | { type: 'freeze'; on: boolean }
   | { type: 'setCursor'; on: boolean };

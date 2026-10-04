@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
+import { DEFAULT_DISPLAY, FILL_MODES } from '@shared/geometry';
 import { IDLE_PROJECTION, type ProjectResult } from '@shared/projection';
 import { resolveTarget } from '@shared/targeting';
 import { extendDisplays } from './displaySwitch';
@@ -51,6 +52,7 @@ function state(): AppState {
     projection: engine?.current ?? IDLE_PROJECTION,
     followFullscreen: follower?.enabled ?? true,
     coveredBy: coverWatcher?.current ?? [],
+    display: engine?.currentDisplay ?? DEFAULT_DISPLAY,
   };
 }
 
@@ -328,6 +330,14 @@ function registerIpc(): void {
     return sources.refresh();
   });
   handle('output:project', controlWc, (sourceId) => project(sourceId));
+  handle('output:set-fill-mode', controlWc, (mode) => {
+    // Validate at the IPC boundary even though the type says FillMode.
+    if (!FILL_MODES.includes(mode)) return;
+    engine?.setFillMode(mode);
+  });
+  handle('output:set-crop', controlWc, (crop) => {
+    engine?.setCrop(crop);
+  });
   handle('output:set-follow', controlWc, (on) => {
     follower?.setEnabled(on);
     pushState();

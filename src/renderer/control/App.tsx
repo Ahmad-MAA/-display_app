@@ -521,6 +521,7 @@ export function App() {
                   projection={state.projection}
                   notice={notice}
                   followFullscreen={state.followFullscreen}
+                  display={state.display}
                 />
               </Card>
               <Card title="Projector">

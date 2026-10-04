@@ -1,5 +1,11 @@
 import { session, webContents, type WebContents } from 'electron';
-import type { SourceDescriptor } from '@shared/outputEngine';
+import {
+  DEFAULT_DISPLAY,
+  normalizeCrop,
+  type CropRect,
+  type OutputDisplay,
+} from '@shared/geometry';
+import type { FillMode, SourceDescriptor } from '@shared/outputEngine';
 import {
   describeCaptureError,
   IDLE_PROJECTION,
@@ -29,6 +35,7 @@ export class ElectronOutputEngine {
   private projection: ProjectionInfo = IDLE_PROJECTION;
   private effective: SourceDescriptor | null = null;
   private token = 0;
+  private display: OutputDisplay = DEFAULT_DISPLAY;
   /** Set by the full-screen follower: told when a followed capture fails. */
   onFollowProblem: ((p: FollowProblem) => void) | null = null;
 
@@ -42,6 +49,34 @@ export class ElectronOutputEngine {
 
   get current(): ProjectionInfo {
     return this.projection;
+  }
+
+  get currentDisplay(): OutputDisplay {
+    return this.display;
+  }
+
+  private applyDisplay(d: OutputDisplay): void {
+    this.display = d;
+    this.output.send('output:display', d);
+    this.onChange(this.projection);
+  }
+
+  setFillMode(mode: FillMode): void {
+    if (mode === this.display.fillMode) return;
+    log('info', `Fill mode: ${mode}`);
+    this.applyDisplay({ ...this.display, fillMode: mode });
+  }
+
+  /** Normalized crop (0..1 of the source frame); null = whole frame. */
+  setCrop(crop: CropRect | null): void {
+    const c = normalizeCrop(crop);
+    log(
+      'info',
+      c
+        ? `Crop: ${(c.width * 100).toFixed(0)}%×${(c.height * 100).toFixed(0)}% at (${(c.x * 100).toFixed(0)}%, ${(c.y * 100).toFixed(0)}%)`
+        : 'Crop cleared',
+    );
+    this.applyDisplay({ ...this.display, crop: c });
   }
 
   private set(p: ProjectionInfo): void {
@@ -113,6 +148,8 @@ export class ElectronOutputEngine {
         : 'Projection stopped',
     );
     this.startCapture(source);
+    // A crop belongs to one source; the fill mode carries over.
+    if (this.display.crop) this.applyDisplay({ ...this.display, crop: null });
     this.set({
       ...IDLE_PROJECTION,
       source,

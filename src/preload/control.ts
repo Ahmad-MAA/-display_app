@@ -38,6 +38,8 @@ const api: ControlApi = {
   onSources: (cb) => on('sources:changed', cb),
   project: (sourceId) => invoke('output:project', sourceId),
   setFollowFullscreen: (on) => invoke('output:set-follow', on),
+  setFillMode: (mode) => invoke('output:set-fill-mode', mode),
+  setCrop: (crop) => invoke('output:set-crop', crop),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

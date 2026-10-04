@@ -72,8 +72,9 @@ source up in the latest enumeration → `ElectronOutputEngine.setSource(descript
   stopped. A `token` on every request/status pair discards stale results.
 - Track `ended` → black + `source-status: ended` → main marks the projection "Source closed".
   `getDisplayMedia` failures map to presenter-facing messages (`describeCaptureError`).
-- Every 2 s the Output samples a 64×36 copy of the frame; all-black → "minimized or protected"
-  hint in the Control Panel.
+- Every 2 s the Output samples a 160×90 copy of the frame (every pixel checked, so a mostly-black
+  terminal with some text isn't flagged); all-black → "minimized or protected" hint in the
+  Control Panel.
 - **Minimized sources**: main asks the window helper to restore the HWND with
   `SW_SHOWNOACTIVATE` (or `SW_SHOWMAXIMIZED` when it was maximized, which activates) and returns
   focus to the Control Panel (`moveTop` + `focus`, again after 150 ms), then starts capture.
@@ -81,6 +82,33 @@ source up in the latest enumeration → `ElectronOutputEngine.setSource(descript
   (≤480×270, ≤10 fps) of the same source, restarted whenever the projection token changes.
 - Projecting the projector's own screen is refused when capture exclusion is unavailable, and
   allowed with an explanatory notice when it is.
+
+## Fill modes and crop
+
+`ElectronOutputEngine.setFillMode()` / `setCrop()` send `output:display { fillMode, crop }` to the
+Output window (`src/renderer/output/display.ts`). Geometry lives in `src/shared/geometry.ts`
+(pure, unit-tested) so a native engine can reuse the exact rules.
+
+- **Crop is source-normalized** (`CropRect`, 0..1 of the frame): independent of capture
+  resolution, the same for every engine. `normalizeCrop()` clamps, fixes negative drags, rejects
+  non-finite values (it crosses IPC) and turns ≈full-frame into null.
+- **No crop**: CSS `object-fit` on the `<video>` (fit→contain, fill→cover, stretch→fill).
+- **Crop**: a `<canvas>` above the video draws only the crop region on every new frame
+  (`requestVideoFrameCallback`), positioned by `placeImage(cropW, cropH, viewport, fillMode)`; the
+  canvas is sized in device pixels.
+- Video and canvas live in one `#stage` element, which is what fades through black on switches.
+- A crop is cleared when a new source is picked; the fill mode persists (saved to settings in
+  step 7). Hotkey M (fill-mode cycle) arrives in step 6.
+- The crop editor (Control Panel) uses its own ≤1280×720, 10 fps capture of the same source and
+  maps pointer positions through the video's contain-fitted content box.
+
+## Covering windows
+
+`CoverWatcher` polls the window helper's `covering` op once a second while the Output is visible:
+windows above the Output in z-order, visible and not cloaked, covering ≥25% of the projector
+monitor (shell surfaces and our own windows filtered by `relevantCovering()`). A set seen twice in a
+row raises a red banner naming the window(s); it clears as soon as nothing covers the projector.
+Typical cause: a slide show with Presenter View, which is topmost on the second monitor.
 
 ## Follow full screen
 
