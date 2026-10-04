@@ -68,7 +68,7 @@ export function toDescriptor(raw: RawSource, processName: string | null): Source
  * pixels instead of every pixel; thumbnails are 320×180 so this stays cheap.
  */
 export function isBlankBitmap(
-  data: Uint8Array,
+  data: ArrayLike<number>,
   width: number,
   height: number,
   threshold = 12,

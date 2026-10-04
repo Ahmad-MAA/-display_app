@@ -189,6 +189,17 @@ export class WindowHelper {
     return out;
   }
 
+  /**
+   * Restore a minimized window without activating it (see the script). Resolves
+   * restored=false when the helper is unavailable or the window is gone.
+   */
+  async restore(hwnd: string): Promise<{ restored: boolean; activated: boolean }> {
+    const result = await this.request({ op: 'restore', hwnd });
+    if (!result || typeof result !== 'object') return { restored: false, activated: false };
+    const r = result as Record<string, unknown>;
+    return { restored: r['restored'] === true, activated: r['activated'] === true };
+  }
+
   dispose(): void {
     this.disabled = true;
     this.child?.kill();

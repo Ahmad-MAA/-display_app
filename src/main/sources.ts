@@ -144,6 +144,11 @@ export class SourceService {
     return this.last;
   }
 
+  /** Restore a minimized window without activating it (via the window helper). */
+  restoreWindow(hwnd: string): Promise<{ restored: boolean; activated: boolean }> {
+    return this.helper.restore(hwnd);
+  }
+
   /** Remember visible windows' thumbnails; forget windows that no longer exist. */
   private updateMemo(sources: readonly CaptureSource[]): void {
     const present = new Set<string>();

@@ -7,8 +7,8 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 3 (source list) — awaiting hardware check.** Steps 1–2 passed on hardware
-> ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)). Projecting a source comes in step 4.
+> **Status: step 4 (click to project) — awaiting hardware check.** Steps 1–3 passed on hardware
+> ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
 
 ## Setup
 
@@ -62,6 +62,25 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Step 4 hardware check
+
+Click any card in **Sources** to put it on the projector. **Now projecting** (right column) shows
+a live 10 fps preview, the capture size, and a **Stop** button. Run the five "Step 4" items in
+**Diagnostics → Hardware checks**:
+
+1. **Project a window**: it fills the projector without distortion (black bars when the
+   shape differs: letterbox/pillarbox), and the preview is live.
+2. **Switch**: pick another source: a 150 ms fade through black, no flash of the old one.
+3. **Minimized card**: picking it restores the window _without activating it_
+   (`SW_SHOWNOACTIVATE`) and projects it; the Control Panel keeps focus. A window that was
+   maximized before minimizing can only be restored maximized by activating it, so focus is
+   handed straight back to the Control Panel. Try both kinds.
+4. **Close the projected window**: the projector goes black and the panel says "Source closed".
+5. **Recursive-mirror test**: Screens → pick the ASUS (projector) screen. There must be no
+   infinite mirror: the Output window is excluded from capture, so the projector shows that
+   screen as if the Output weren't there (usually the wallpaper). The panel shows a notice
+   explaining this.
 
 ## Step 3 hardware check
 

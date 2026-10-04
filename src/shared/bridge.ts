@@ -1,6 +1,8 @@
 /** Shapes of the APIs each preload exposes via contextBridge. Pure types: no Electron imports. */
 import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
 import type { TestPatternInfo } from './ipc';
+import type { SourceDescriptor } from './outputEngine';
+import type { ProjectResult, SourceStatus } from './projection';
 import type { SourceList } from './sources';
 
 export interface ControlApi {
@@ -15,9 +17,12 @@ export interface ControlApi {
   getSources(): Promise<SourceList>;
   refreshSources(): Promise<SourceList>;
   onSources(cb: (list: SourceList) => void): () => void;
+  project(sourceId: string | null): Promise<ProjectResult>;
 }
 
 export interface OutputApi {
   onTestPattern(cb: (info: TestPatternInfo | null) => void): () => void;
   reportViewport(v: OutputViewport): void;
+  onSetSource(cb: (req: { token: number; source: SourceDescriptor | null }) => void): () => void;
+  reportSourceStatus(status: SourceStatus): void;
 }

@@ -7,6 +7,7 @@
  * Protocol: one JSON request per stdin line, one JSON response per stdout line, in order.
  *   {"op":"names","hwnds":["123",...]}  → {"ok":true,"result":{"123":"POWERPNT"|null}}
  *   {"op":"minimized"}                  → {"ok":true,"result":[{"hwnd":"123","title":"…","processName":"…"}]}
+ *   {"op":"restore","hwnd":"123"}       → {"ok":true,"result":{"restored":true,"activated":false}}
  * Failures → {"ok":false,"error":"…"}
  */
 export const WINDOW_HELPER_SCRIPT = String.raw`
@@ -25,6 +26,11 @@ public class PdWindow {
   public string processName { get; set; }
 }
 
+public class PdRestoreResult {
+  public bool restored { get; set; }
+  public bool activated { get; set; }
+}
+
 public static class PdWin {
   public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
@@ -36,6 +42,23 @@ public static class PdWin {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int max);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+  [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
+  [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
+
+  [StructLayout(LayoutKind.Sequential)]
+  struct POINT { public int x; public int y; }
+  [StructLayout(LayoutKind.Sequential)]
+  struct RECT { public int left; public int top; public int right; public int bottom; }
+  [StructLayout(LayoutKind.Sequential)]
+  struct WINDOWPLACEMENT {
+    public int length; public int flags; public int showCmd;
+    public POINT minPosition; public POINT maxPosition; public RECT normalPosition;
+  }
+
+  const int SW_SHOWMAXIMIZED = 3;
+  const int SW_SHOWNOACTIVATE = 4;
+  const int WPF_RESTORETOMAXIMIZED = 2;
 
   const uint GW_OWNER = 4;
   const int GWL_EXSTYLE = -20;
@@ -55,6 +78,25 @@ public static class PdWin {
     StringBuilder sb = new StringBuilder(len + 1);
     GetWindowText(hWnd, sb, sb.Capacity);
     return sb.ToString();
+  }
+
+  // Restore a minimized window WITHOUT activating it, so the Control Panel keeps focus.
+  // SW_SHOWNOACTIVATE brings it back at its normal size. A window that was maximized
+  // before minimizing can only return to maximized via SW_SHOWMAXIMIZED, which activates
+  // it; 'activated' tells the caller to hand focus straight back to the Control Panel.
+  public static PdRestoreResult Restore(IntPtr h) {
+    PdRestoreResult r = new PdRestoreResult();
+    if (!IsWindow(h)) { r.restored = false; return r; }
+    if (!IsIconic(h)) { r.restored = true; return r; }
+    WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
+    wp.length = Marshal.SizeOf(typeof(WINDOWPLACEMENT));
+    bool toMax = GetWindowPlacement(h, ref wp) && (wp.flags & WPF_RESTORETOMAXIMIZED) != 0;
+    ShowWindow(h, toMax ? SW_SHOWMAXIMIZED : SW_SHOWNOACTIVATE);
+    r.activated = toMax;
+    // ShowWindow returns before the restore animation finishes; wait for it (max 1.5 s).
+    for (int i = 0; i < 30 && IsIconic(h); i++) System.Threading.Thread.Sleep(50);
+    r.restored = !IsIconic(h);
+    return r;
   }
 
   // Top-level, titled, minimized app windows: the ones a user would expect to see
@@ -93,6 +135,8 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         $out[[string]$h] = $name
       }
       $resp = @{ ok = $true; result = $out }
+    } elseif ($req.op -eq 'restore') {
+      $resp = @{ ok = $true; result = [PdWin]::Restore([IntPtr][long]$req.hwnd) }
     } elseif ($req.op -eq 'minimized') {
       $resp = @{ ok = $true; result = @([PdWin]::Minimized()) }
     } else {

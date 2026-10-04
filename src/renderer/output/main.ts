@@ -1,3 +1,4 @@
+import './capture';
 import type { TestPatternInfo } from '@shared/ipc';
 
 const api = window.projectorOutput;

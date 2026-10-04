@@ -44,3 +44,14 @@ warnings at all after the step-1 rounding fixes.
 | Step-1 regressions (primary 150 %, right, non-native 1280×800) | PASS   | Output exact in each                                        |
 
 Not testable with two displays: choosing between several projectors in the dropdown.
+
+# Step 3 hardware check — results
+
+Same hardware, 2026-10-04.
+
+| Check                                                                                 | Result           | Evidence                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Windows tab: thumbnails, icons, process names; ProjectorDesk not listed               | PASS             | 11 windows, 11/11 with process name (e.g. `olk`, `msedge`, `Code`, `ApplicationFrameHost` for Settings)                                                                        |
+| Minimized window stays, greyed, with restore hint; restore brings live thumbnail back | PASS (after fix) | First run FAILED: Electron omits minimized windows. Fixed via window helper (`EnumWindows` + `IsIconic`); re-test listed 3 minimized windows incl. one minimized before launch |
+| Screens tab: both screens, projector one marked                                       | PASS             | `Screen 2 · ASUS VA27EHE · projector`                                                                                                                                          |
+| New app appears within ~2 s; filter narrows                                           | PASS             | —                                                                                                                                                                              |

@@ -36,6 +36,7 @@ const api: ControlApi = {
   getSources: () => invoke('sources:get'),
   refreshSources: () => invoke('sources:refresh'),
   onSources: (cb) => on('sources:changed', cb),
+  project: (sourceId) => invoke('output:project', sourceId),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

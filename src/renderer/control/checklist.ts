@@ -29,6 +29,37 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'project-window',
+    label:
+      'Step 4: click a window → it fills the projector without distortion (black bars if the shape differs) and the “Now projecting” preview is live',
+    requires: (_l, s) =>
+      s.projection.state === 'live' ? null : 'click a window card to project it first',
+  },
+  {
+    id: 'project-switch',
+    label:
+      'Step 4: click another source → quick fade through black, no flash of the old content; the previous capture stops',
+    requires: (_l, s) =>
+      s.projection.token >= 2 ? null : 'project at least two sources one after the other',
+  },
+  {
+    id: 'project-minimized',
+    label:
+      'Step 4: click a MINIMIZED card → it restores and projects; the Control Panel stays focused and in front (also try one that was maximized before minimizing)',
+    requires: () => null,
+  },
+  {
+    id: 'project-closed',
+    label: 'Step 4: close the projected window → projector goes black, panel says “Source closed”',
+    requires: () => null,
+  },
+  {
+    id: 'project-recursion',
+    label:
+      'Step 4: Screens → project the ASUS (projector) screen → NO recursive mirror; the projector shows that screen without the Output on it',
+    requires: () => null,
+  },
+  {
     id: 'sources-windows',
     label:
       'Step 3: Windows tab lists your open apps with live thumbnails, icons and process names; ProjectorDesk itself is not listed',

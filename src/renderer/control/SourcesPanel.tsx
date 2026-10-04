@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ContentProtectionStatus } from '@shared/diagnostics';
+import type { ProjectionInfo } from '@shared/projection';
 import { filterSources, type CaptureSource, type SourceList } from '@shared/sources';
 
 const api = window.projectorDesk;
@@ -33,15 +34,50 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-function SourceCard({ source, protectionOk }: { source: CaptureSource; protectionOk: boolean }) {
+const ACTIVE_LABEL: Partial<Record<ProjectionInfo['state'], string>> = {
+  restoring: 'Restoring…',
+  starting: 'Starting…',
+  live: 'On projector',
+  ended: 'Closed',
+  error: 'Failed',
+};
+
+function SourceCard({
+  source,
+  protectionOk,
+  projection,
+  onPick,
+}: {
+  source: CaptureSource;
+  protectionOk: boolean;
+  projection: ProjectionInfo;
+  onPick: (sourceId: string) => void;
+}) {
   const d = source.descriptor;
   const disabled = source.isProjectorScreen && !protectionOk;
+  const active = projection.source?.sourceId === d.sourceId ? projection.state : null;
+  const activeLabel = active ? ACTIVE_LABEL[active] : undefined;
   return (
-    <article
-      className={`overflow-hidden rounded-lg border bg-slate-900 ${
-        source.isProjectorScreen ? 'border-amber-600/70' : 'border-slate-800'
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        onPick(d.sourceId);
+      }}
+      className={`block w-full overflow-hidden rounded-lg border bg-slate-900 text-left transition hover:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none disabled:cursor-not-allowed disabled:hover:border-slate-800 ${
+        active === 'live'
+          ? 'border-sky-500 ring-2 ring-sky-500'
+          : source.isProjectorScreen
+            ? 'border-amber-600/70'
+            : 'border-slate-800'
       } ${disabled ? 'opacity-50' : ''} ${source.minimized ? 'border-dashed' : ''}`}
-      title={source.minimized ? `${d.title} (minimized)` : d.title}
+      title={
+        disabled
+          ? 'Disabled: capture exclusion unavailable'
+          : source.minimized
+            ? `${d.title} (minimized; picking it restores it without taking focus)`
+            : `Project “${d.title}”`
+      }
     >
       <div className="relative aspect-video bg-black">
         {source.thumbnail && !source.thumbnailBlank && (
@@ -55,9 +91,7 @@ function SourceCard({ source, protectionOk }: { source: CaptureSource; protectio
           <div className="absolute inset-0 flex items-center justify-center p-3">
             <div className="flex max-w-[90%] flex-col items-center gap-1 rounded-md bg-black/75 px-3 py-2 text-center text-xs text-slate-200">
               <span className="rounded bg-slate-600 px-1.5 py-0.5 font-semibold">Minimized</span>
-              <span>
-                Restore this window to project it. Windows can’t capture minimized windows.
-              </span>
+              <span>Click to restore it and project it; the Control Panel keeps focus.</span>
             </div>
           </div>
         ) : (
@@ -71,6 +105,19 @@ function SourceCard({ source, protectionOk }: { source: CaptureSource; protectio
               </span>
             </div>
           )
+        )}
+        {activeLabel && (
+          <span
+            className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+              active === 'live'
+                ? 'bg-sky-500 text-white'
+                : active === 'error' || active === 'ended'
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-slate-600 text-white'
+            }`}
+          >
+            {activeLabel}
+          </span>
         )}
         {source.isProjectorScreen && (
           <span className="absolute left-2 top-2 rounded bg-amber-500/90 px-1.5 py-0.5 text-[11px] font-semibold text-black">
@@ -106,16 +153,20 @@ function SourceCard({ source, protectionOk }: { source: CaptureSource; protectio
             : 'Disabled: capture exclusion is unavailable, so this would mirror the Output into itself.'}
         </p>
       )}
-    </article>
+    </button>
   );
 }
 
 export function SourcesPanel({
   list,
   protection,
+  projection,
+  onPick,
 }: {
   list: SourceList | null;
   protection: ContentProtectionStatus | null;
+  projection: ProjectionInfo;
+  onPick: (sourceId: string) => void;
 }) {
   const now = useNow(1000);
   const [tab, setTab] = useState<'window' | 'screen'>('window');
@@ -211,7 +262,13 @@ export function SourcesPanel({
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
         {shown.map((s) => (
-          <SourceCard key={s.descriptor.sourceId} source={s} protectionOk={protectionOk} />
+          <SourceCard
+            key={s.descriptor.sourceId}
+            source={s}
+            protectionOk={protectionOk}
+            projection={projection}
+            onPick={onPick}
+          />
         ))}
       </div>
     </section>

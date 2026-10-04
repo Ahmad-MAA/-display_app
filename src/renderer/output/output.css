@@ -17,6 +17,8 @@ body {
   height: 100vh;
   object-fit: contain; /* letterbox: no distortion */
   background: #000;
+  opacity: 0;
+  transition: opacity 150ms linear; /* crossfade through black on source switch */
 }
 
 /* Placement test pattern: shows whether the window covers the display exactly. */

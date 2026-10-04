@@ -3,6 +3,7 @@ import type { AppState, ExtendResult, PlacementReport } from '@shared/diagnostic
 import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@shared/displays';
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
+import { NowProjecting } from './NowProjecting';
 import { SourcesPanel, useSources } from './SourcesPanel';
 import { useAppState, useLogs } from './useAppState';
 
@@ -391,6 +392,7 @@ export function App() {
   const logs = useLogs();
   const sourceList = useSources();
   const [view, setView] = useState<'sources' | 'diagnostics'>('sources');
+  const [notice, setNotice] = useState<{ tone: 'warn' | 'bad'; text: string } | null>(null);
   const [checks, setChecksState] = useState(loadChecks);
   const [copied, setCopied] = useState(false);
 
@@ -416,6 +418,16 @@ export function App() {
   if (!state) return <div className="p-6 text-slate-400">Loading…</div>;
 
   const cp = state.contentProtection;
+
+  const pick = async (sourceId: string) => {
+    setNotice(null);
+    try {
+      const r = await api.project(sourceId);
+      if (r.message) setNotice({ tone: r.ok ? 'warn' : 'bad', text: r.message });
+    } catch (err) {
+      setNotice({ tone: 'bad', text: `Couldn’t project: ${String(err)}` });
+    }
+  };
 
   const copyReport = async () => {
     await navigator.clipboard.writeText(buildReport(state, checks, logs, sourceList));
@@ -478,10 +490,20 @@ export function App() {
 
         {view === 'sources' && (
           <div className="grid items-start gap-4 lg:grid-cols-[1fr_340px]">
-            <SourcesPanel list={sourceList} protection={cp} />
-            <Card title="Projector">
-              <ProjectorPicker state={state} />
-            </Card>
+            <SourcesPanel
+              list={sourceList}
+              protection={cp}
+              projection={state.projection}
+              onPick={(id) => void pick(id)}
+            />
+            <div className="space-y-4">
+              <Card title="Now projecting">
+                <NowProjecting projection={state.projection} notice={notice} />
+              </Card>
+              <Card title="Projector">
+                <ProjectorPicker state={state} />
+              </Card>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import type { DisplayInfo, Rect } from './displays';
+import type { ProjectionInfo } from './projection';
 
 export interface ContentProtectionStatus {
   platform: string;
@@ -86,4 +87,5 @@ export interface AppState {
   extendSuccesses: number;
   /** Times the user made another monitor primary and the Control Panel followed. */
   primarySwaps: number;
+  projection: ProjectionInfo;
 }

@@ -55,6 +55,33 @@ calls. Thumbnails are sent as JPEG data URLs; icons as PNG.
   once, and names fall back to null. No native Node module is involved.
 - Screen sources map `display_id` to our display list for labels and to flag the projector screen.
 
+## Routing a source to the projector
+
+Only the source **id** crosses IPC: Control Panel → `output:project(sourceId)` → main looks the
+source up in the latest enumeration → `ElectronOutputEngine.setSource(descriptor)` →
+`output:set-source { token, source }` to the Output window.
+
+- The Output window calls `getDisplayMedia({ video: { frameRate: 60 }, audio: false })`. main's
+  `session.setDisplayMediaRequestHandler` answers with the current source, and only for the
+  Output window and the Control Panel (identified with `webContents.fromFrame`). Anything else is
+  denied. Permission requests/checks are deny-by-default (display-capture, media, clipboard
+  write, fullscreen allowed for our two pages only).
+- Switching (`src/renderer/output/capture.ts`): fade video to black (150 ms CSS transition) →
+  stop old tracks → start new capture → fade in on the first frame
+  (`requestVideoFrameCallback`). Requests are serialized; a superseded request's tracks are
+  stopped. A `token` on every request/status pair discards stale results.
+- Track `ended` → black + `source-status: ended` → main marks the projection "Source closed".
+  `getDisplayMedia` failures map to presenter-facing messages (`describeCaptureError`).
+- Every 2 s the Output samples a 64×36 copy of the frame; all-black → "minimized or protected"
+  hint in the Control Panel.
+- **Minimized sources**: main asks the window helper to restore the HWND with
+  `SW_SHOWNOACTIVATE` (or `SW_SHOWMAXIMIZED` when it was maximized, which activates) and returns
+  focus to the Control Panel (`moveTop` + `focus`, again after 150 ms), then starts capture.
+- **"On Projector" preview**: the Control Panel makes its own low-res capture
+  (≤480×270, ≤10 fps) of the same source, restarted whenever the projection token changes.
+- Projecting the projector's own screen is refused when capture exclusion is unavailable, and
+  allowed with an explanatory notice when it is.
+
 ## Recursive-mirror prevention
 
 `setContentProtection(true)` is called on the Output window right after construction, before it is ever shown (`src/main/contentProtection.ts`). Startup verifies both `isContentProtected()` and that the OS build is 19041 or newer, since only `WDA_EXCLUDEFROMCAPTURE` removes the window from capture. Otherwise the Control Panel shows a persistent warning. Later steps disable "Entire Screen" for the projector display in that case.

@@ -1,10 +1,12 @@
 import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
+import { IDLE_PROJECTION, type ProjectResult } from '@shared/projection';
 import { resolveTarget } from '@shared/targeting';
 import { extendDisplays } from './displaySwitch';
 import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
+import { ElectronOutputEngine } from './electronOutputEngine';
 import { OutputWindow } from './outputWindow';
 import { ownHwnds, SourceService } from './sources';
 import { lockDownNavigation, loadPage, preloadPath } from './windows';
@@ -12,6 +14,7 @@ import { lockDownNavigation, loadPage, preloadPath } from './windows';
 let control: BrowserWindow | null = null;
 let output: OutputWindow | null = null;
 let sources: SourceService | null = null;
+let engine: ElectronOutputEngine | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
 let lostDisplayId: number | null = null;
@@ -39,6 +42,7 @@ function state(): AppState {
     hotplugRecoveries,
     extendSuccesses,
     primarySwaps,
+    projection: engine?.current ?? IDLE_PROJECTION,
   };
 }
 
@@ -208,6 +212,70 @@ function createControlWindow(): BrowserWindow {
   return win;
 }
 
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Put the Control Panel back in front after something else grabbed activation. */
+function returnFocusToControl(): void {
+  if (!control || control.isDestroyed()) return;
+  const refocus = () => {
+    if (control && !control.isDestroyed() && !control.isFocused()) {
+      control.moveTop();
+      control.focus();
+    }
+  };
+  refocus();
+  // A restore animation can re-activate the window shortly after ShowWindow returns.
+  setTimeout(refocus, 150);
+}
+
+/** Control Panel picked a source (only its id crosses IPC). */
+async function project(sourceId: string | null): Promise<ProjectResult> {
+  if (!engine || !sources) return { ok: false, message: 'Not ready yet.' };
+  if (sourceId === null) {
+    engine.setSource(null);
+    return { ok: true, message: null };
+  }
+  const find = () => sources?.latest.sources.find((s) => s.descriptor.sourceId === sourceId);
+  let src = find();
+  if (!src) {
+    await sources.refresh();
+    src = find();
+  }
+  if (!src) {
+    return { ok: false, message: 'That source is no longer available; it may have been closed.' };
+  }
+  const d = src.descriptor;
+  const cp = output?.contentProtection;
+  if (d.kind === 'screen' && src.isProjectorScreen && !cp?.ok) {
+    return {
+      ok: false,
+      message:
+        'Blocked: capture exclusion is unavailable, so projecting the projector’s own screen would mirror the Output into itself.',
+    };
+  }
+  if (src.minimized && d.hwnd) {
+    engine.markRestoring(d);
+    log('info', `Restoring minimized window "${d.title}" without activating it`);
+    const r = await sources.restoreWindow(d.hwnd);
+    if (r.activated) log('info', 'Window had to be activated to restore maximized; focus returned');
+    returnFocusToControl();
+    if (!r.restored) {
+      const message = `Couldn’t restore “${d.title}”. Restore it from the taskbar, then pick it again.`;
+      engine.fail(d, message);
+      return { ok: false, message };
+    }
+    await delay(250); // let the restore animation finish so the first frames aren't mid-animation
+  }
+  engine.setSource(d);
+  void sources.refresh();
+  return {
+    ok: true,
+    message: src.isProjectorScreen
+      ? 'You’re projecting the projector’s own screen. The Output window is excluded from capture, so there’s no mirror, but the audience sees whatever else is on that screen.'
+      : null,
+  };
+}
+
 function registerIpc(): void {
   handle('state:get', controlWc, () => state());
   handle('logs:get', controlWc, () => getLogs());
@@ -241,6 +309,11 @@ function registerIpc(): void {
   handle('sources:refresh', controlWc, async () => {
     if (!sources) throw new Error('not ready');
     return sources.refresh();
+  });
+  handle('output:project', controlWc, (sourceId) => project(sourceId));
+  onOutput('output:source-status', outputWc, (st) => {
+    engine?.handleStatus(st);
+    if (st.state === 'ended') void sources?.refresh();
   });
   handle('output:replace', controlWc, async () => {
     await placeOutput('manual re-place');
@@ -277,6 +350,9 @@ if (!app.requestSingleInstanceLock()) {
     lastPrimaryId = screen.getPrimaryDisplay().id;
     output = new OutputWindow((report) => {
       lastPlacement = report;
+      pushState();
+    });
+    engine = new ElectronOutputEngine(output, controlWc, () => {
       pushState();
     });
     sources = new SourceService(
