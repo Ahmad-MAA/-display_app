@@ -198,7 +198,12 @@ export class OutputWindow {
     }
 
     // 1) Windowed placement using the target display's DIP bounds (NOT workArea).
-    const first = this.setBoundsVerified(target, display.scaleFactor, 'windowed');
+    // The first move across monitors converts DIPs through the SOURCE monitor's scale
+    // (seen on hardware: primary 125% → secondary 100% read back 1918×1079 for 1920×1080),
+    // so allow the rounding of whichever scale is larger.
+    const fromScale = screen.getDisplayMatching(win.getBounds()).scaleFactor;
+    const roundingScale = Math.max(display.scaleFactor, fromScale);
+    const first = this.setBoundsVerified(target, roundingScale, 'windowed');
     if (first.corrected) corrected = true;
 
     // 2) Show without stealing focus from the Control Panel, then go full screen.
@@ -218,7 +223,7 @@ export class OutputWindow {
       );
       win.setFullScreen(false);
       await waitFor(win, 'leave-full-screen');
-      this.setBoundsVerified(target, display.scaleFactor, 'retry');
+      this.setBoundsVerified(target, roundingScale, 'retry');
       win.setFullScreen(true);
       await waitFor(win, 'enter-full-screen');
       await delay(50);

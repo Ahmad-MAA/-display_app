@@ -189,6 +189,8 @@ function Checklist({
   setChecks: (c: Record<CheckId, CheckRecord>) => void;
 }) {
   const mark = (id: CheckId, result: CheckResult) => {
+    // Re-clicking the current result must not overwrite the evidence recorded with it.
+    if (result !== 'untested' && checks[id]?.result === result) return;
     setChecks({
       ...checks,
       [id]: { result, snapshot: result === 'untested' ? null : placementSummary(state) },
@@ -237,7 +239,7 @@ function Checklist({
               >
                 {blocker
                   ? `Set up: ${blocker}`
-                  : 'Current layout matches — check the projector, then mark.'}
+                  : (c.note?.(state) ?? 'Current layout matches — check the projector, then mark.')}
               </p>
             )}
             {r.snapshot && (

@@ -7,7 +7,7 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: build step 1 (scaffold) — waiting on the hardware gate.** Display
+> **Status: step 1 complete — hardware gate passed (see [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).** Display
 > placement, mixed-DPI verification, content protection and basic hot-plug
 > handling are in place. Source selection and capture come in later steps.
 

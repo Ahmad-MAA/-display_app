@@ -25,6 +25,8 @@ export const HARDWARE_CHECKS: readonly {
   id: string;
   label: string;
   requires: (l: Layout, s: AppState) => string | null;
+  /** Shown instead of the generic hint when the item can't be verified automatically. */
+  note?: (s: AppState) => string;
 }[] = [
   {
     id: 'dpi-primary-high',
@@ -71,6 +73,12 @@ export const HARDWARE_CHECKS: readonly {
     label: 'Projector at a non-native resolution (e.g. 1024×768 or 1280×800)',
     // Windows doesn't expose the panel's native mode to Electron; the tester confirms.
     requires: () => null,
+    note: (s) => {
+      const d = s.displays.find((x) => x.id === s.targetDisplayId);
+      return d
+        ? `Projector is currently at ${d.nativeSize.width}×${d.nativeSize.height} px. Pass only if that is NOT its native resolution (Settings → Display → Display resolution).`
+        : 'Set the projector to a non-native resolution.';
+    },
   },
   {
     id: 'hotplug',
