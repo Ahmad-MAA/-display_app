@@ -21,6 +21,6 @@ describe('window helper launch', () => {
   });
 
   it('script is plain ASCII (safe for Windows PowerShell 5.1 file reading)', () => {
-    expect([...WINDOW_HELPER_SCRIPT].every((c) => c.charCodeAt(0) < 128)).toBe(true);
+    expect(/[^\t\n\r\x20-\x7e]/.test(WINDOW_HELPER_SCRIPT)).toBe(false);
   });
 });
