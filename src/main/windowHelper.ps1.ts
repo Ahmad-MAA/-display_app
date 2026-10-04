@@ -10,6 +10,7 @@
  *   {"op":"restore","hwnd":"123"}       → {"ok":true,"result":{"restored":true,"activated":false}}
  *   {"op":"follow","hwnd":"123"}        → {"ok":true,"result":{"target":{…},"fullscreen":[{…}]}}
  *   {"op":"inspect","hwnd":"123"}       → {"ok":true,"result":[{…every top-level window of that process…}]}
+ *   {"op":"focus","hwnd":"123"}         → {"ok":true,"result":{foreground window + the target thread's active/focus/caret state}}
  *   {"op":"covering","hwnd":"123"}      → {"ok":true,"result":[{…windows above HWND 123 covering ≥25% of its monitor…}]}
  * Failures → {"ok":false,"error":"…"}
  */
@@ -56,10 +57,30 @@ public class PdWinInfo {
   public bool owned { get; set; }
   public bool fullscreen { get; set; }
   public bool topmost { get; set; }
+  // Extended-style hints for ranking full-screen candidates (overlays rank last).
+  public bool layered { get; set; }
+  public bool transparent { get; set; }
+  public bool toolWindow { get; set; }
+  public bool noActivate { get; set; }
+  public string exStyle { get; set; }
   // Covering op only: percentage of the monitor this window covers.
   public int coverage { get; set; }
   public PdRect rect { get; set; }
   public PdRect monitor { get; set; }
+}
+
+public class PdFocusInfo {
+  public string foregroundHwnd { get; set; }
+  public string foregroundTitle { get; set; }
+  public string foregroundProcess { get; set; }
+  // The target's top-level window is the foreground window.
+  public bool targetIsForeground { get; set; }
+  // From GetGUIThreadInfo on the target's UI thread.
+  public string threadActiveHwnd { get; set; }
+  public string threadFocusHwnd { get; set; }
+  public string caretHwnd { get; set; }
+  public bool caretBlinking { get; set; }
+  public bool threadInfoOk { get; set; }
 }
 
 public class PdFollowResult {
@@ -94,6 +115,45 @@ public static class PdWin {
 
   const int GWL_STYLE = -16;
   const int WS_EX_TOPMOST = 0x8;
+  const int WS_EX_TRANSPARENT = 0x20;
+  const int WS_EX_LAYERED = 0x80000;
+  const int WS_EX_NOACTIVATE = 0x8000000;
+  const uint GUI_CARETBLINKING = 0x1;
+  const uint GA_ROOT = 2;
+
+  [StructLayout(LayoutKind.Sequential)]
+  struct GUITHREADINFO {
+    public int cbSize; public uint flags;
+    public IntPtr hwndActive; public IntPtr hwndFocus; public IntPtr hwndCapture;
+    public IntPtr hwndMenuOwner; public IntPtr hwndMoveSize; public IntPtr hwndCaret;
+    public RECT rcCaret;
+  }
+  [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO info);
+  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+
+  static string Hex(IntPtr h) { return h == IntPtr.Zero ? null : h.ToInt64().ToString(); }
+
+  // Does the projected window (or its thread) believe it has focus while another app is in front?
+  public static PdFocusInfo Focus(IntPtr target) {
+    PdFocusInfo f = new PdFocusInfo();
+    IntPtr fg = GetForegroundWindow();
+    f.foregroundHwnd = Hex(fg);
+    if (fg != IntPtr.Zero) { f.foregroundTitle = Title(fg); f.foregroundProcess = ProcessName(fg); }
+    f.targetIsForeground = fg != IntPtr.Zero && GetAncestor(fg, GA_ROOT) == GetAncestor(target, GA_ROOT);
+    uint pid;
+    uint tid = GetWindowThreadProcessId(target, out pid);
+    GUITHREADINFO gti = new GUITHREADINFO();
+    gti.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+    if (tid != 0 && GetGUIThreadInfo(tid, ref gti)) {
+      f.threadInfoOk = true;
+      f.threadActiveHwnd = Hex(gti.hwndActive);
+      f.threadFocusHwnd = Hex(gti.hwndFocus);
+      f.caretHwnd = Hex(gti.hwndCaret);
+      f.caretBlinking = (gti.flags & GUI_CARETBLINKING) != 0;
+    }
+    return f;
+  }
   const int WS_MAXIMIZE = 0x01000000;
   const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
   const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -143,7 +203,13 @@ public static class PdWin {
     int cloaked;
     w.cloaked = DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, 4) == 0 && cloaked != 0;
     w.owned = GetWindow(h, GW_OWNER) != IntPtr.Zero;
-    w.topmost = (GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
+    int ex = GetWindowLong(h, GWL_EXSTYLE);
+    w.topmost = (ex & WS_EX_TOPMOST) != 0;
+    w.layered = (ex & WS_EX_LAYERED) != 0;
+    w.transparent = (ex & WS_EX_TRANSPARENT) != 0;
+    w.toolWindow = (ex & WS_EX_TOOLWINDOW) != 0;
+    w.noActivate = (ex & WS_EX_NOACTIVATE) != 0;
+    w.exStyle = "0x" + ex.ToString("X");
     RECT r;
     if (DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) != 0) {
       GetWindowRect(h, out r);
@@ -318,6 +384,8 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
       $resp = @{ ok = $true; result = [PdWin]::Restore([IntPtr][long]$req.hwnd) }
     } elseif ($req.op -eq 'follow') {
       $resp = @{ ok = $true; result = [PdWin]::Follow([IntPtr][long]$req.hwnd) }
+    } elseif ($req.op -eq 'focus') {
+      $resp = @{ ok = $true; result = [PdWin]::Focus([IntPtr][long]$req.hwnd) }
     } elseif ($req.op -eq 'covering') {
       $resp = @{ ok = $true; result = @([PdWin]::Covering([IntPtr][long]$req.hwnd)) }
     } elseif ($req.op -eq 'inspect') {

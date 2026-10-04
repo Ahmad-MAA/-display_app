@@ -26,6 +26,13 @@ export interface WinInfo {
   topmost: boolean;
   /** Covering op only: % of the projector monitor this window covers. */
   coverage: number;
+  /** WS_EX_LAYERED / WS_EX_TRANSPARENT / WS_EX_TOOLWINDOW / WS_EX_NOACTIVATE. */
+  layered: boolean;
+  transparent: boolean;
+  toolWindow: boolean;
+  noActivate: boolean;
+  /** Raw extended style, for diagnostics. */
+  exStyle: string;
   rect: Rect | null;
   monitor: Rect | null;
 }
@@ -68,9 +75,22 @@ export function chooseFollow(
       !IGNORED_CLASSES.has(w.className) &&
       !TRANSIENT_TITLES.has(w.title),
   );
-  const first = candidates[0];
-  if (!first) return { kind: 'primary' };
-  return { kind: 'window', win: candidates.find((w) => w.hwnd === currentHwnd) ?? first };
+  if (candidates.length === 0) return { kind: 'primary' };
+  const current = candidates.find((w) => w.hwnd === currentHwnd);
+  // Prefer real content windows over full-screen overlays (e.g. a player's transparent,
+  // click-through controls bar): stable sort keeps z-order among equals.
+  const best = [...candidates].sort((a, b) => overlayScore(a) - overlayScore(b))[0];
+  if (current && best && overlayScore(current) <= overlayScore(best)) {
+    return { kind: 'window', win: current };
+  }
+  return best ? { kind: 'window', win: best } : { kind: 'primary' };
+}
+
+/** Lower = more likely the real content window. */
+export function overlayScore(w: WinInfo): number {
+  return (
+    (w.transparent ? 8 : 0) + (w.layered ? 4 : 0) + (w.toolWindow ? 2 : 0) + (w.noActivate ? 1 : 0)
+  );
 }
 
 export function decisionKey(d: FollowDecision): string {
@@ -127,6 +147,12 @@ export function describeWindows(list: readonly WinInfo[]): string {
         w.cloaked && 'cloaked',
         w.owned && 'owned',
         w.fullscreen && 'FULLSCREEN',
+        w.topmost && 'topmost',
+        w.layered && 'layered',
+        w.transparent && 'transparent',
+        w.toolWindow && 'tool',
+        w.noActivate && 'noactivate',
+        w.exStyle && `ex=${w.exStyle}`,
       ]
         .filter(Boolean)
         .join(',');

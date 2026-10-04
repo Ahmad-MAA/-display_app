@@ -102,6 +102,28 @@ ${sourcesBlock(sources)}
 ### Hardware gate checklist
 ${checklist}
 
+### Follow full screen trace (last 30)
+\`\`\`
+${
+  logs
+    .filter((l) => l.message.startsWith('Follow:'))
+    .slice(-30)
+    .map((l) => `${l.at} ${l.message}`)
+    .join('\n') || '(none)'
+}
+\`\`\`
+
+### Focus checks
+\`\`\`
+${
+  logs
+    .filter((l) => l.message.startsWith('Focus check:'))
+    .slice(-5)
+    .map((l) => `${l.at} ${l.message}`)
+    .join('\n') || '(none)'
+}
+\`\`\`
+
 ### Warnings / errors (last 40)
 \`\`\`
 ${warnings || '(none)'}

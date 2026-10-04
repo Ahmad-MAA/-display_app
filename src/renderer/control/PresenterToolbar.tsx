@@ -53,12 +53,22 @@ export function PresenterToolbar({ state }: { state: AppState }) {
       <div className="flex flex-wrap gap-1.5">
         <Toggle label="Blank" on={c.blank} action="blank" state={state} danger />
         <Toggle label="Freeze" on={c.freeze} action="freeze" state={state} />
-        <Toggle
-          label={c.cursor ? 'Cursor: shown' : 'Cursor: hidden'}
-          on={!c.cursor}
-          action="cursor"
-          state={state}
-        />
+        {state.cursorHideSupported === false ? (
+          <button
+            disabled
+            title="Chromium's capture always draws the cursor; hiding it needs the native engine (Phase 2)."
+            className="rounded-md bg-slate-800 px-2.5 py-1 text-xs opacity-60 ring-1 ring-slate-700"
+          >
+            Cursor: can’t hide (Phase 1)
+          </button>
+        ) : (
+          <Toggle
+            label={c.cursor ? 'Cursor: shown' : 'Cursor: hidden'}
+            on={!c.cursor}
+            action="cursor"
+            state={state}
+          />
+        )}
         <Toggle label="Stats" on={c.statsOverlay} action="stats" state={state} />
         <Toggle
           label="Hide Output"
@@ -77,10 +87,10 @@ export function PresenterToolbar({ state }: { state: AppState }) {
           {fmt(st.medianLatencyMs, 'ms')} · {st.refreshRate} Hz
         </p>
       )}
-      {!c.cursor && state.cursorHideSupported === false && (
+      {state.cursorHideSupported === false && (
         <p className="text-[11px] text-amber-300">
-          This capture ignored “hide cursor” (a Chromium limitation for this source). The native
-          engine (Phase 2) can hide it.
+          Hiding the cursor isn’t possible with Phase 1 capture: Chromium always draws it. The
+          native engine (Phase 2) can hide it.
         </p>
       )}
       <p className="text-[11px] text-slate-500">

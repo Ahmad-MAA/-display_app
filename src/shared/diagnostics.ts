@@ -117,4 +117,6 @@ export interface AppState {
   outputHiddenByUser: boolean;
   /** Most recent projection sessions, newest first. */
   sessions: SessionSummary[];
+  /** Result of the last "is the projected window focused?" check. */
+  focusCheck: string | null;
 }

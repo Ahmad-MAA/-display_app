@@ -29,6 +29,25 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'follow-wmp-v2',
+    label:
+      'Follow re-test: project WMP, enter its full screen → the VIDEO plays on the projector; exit → back to the WMP window. Then Copy report (it now has a “Follow full screen trace”)',
+    requires: () => null,
+  },
+  {
+    id: 'cursor-v2',
+    label:
+      'Cursor: press C once → the button changes to “Cursor: can’t hide (Phase 1)” with an explanation (Chromium always draws the cursor)',
+    requires: () => null,
+  },
+  {
+    id: 'focus-caret',
+    label:
+      'Caret: project the app that showed a blinking caret, Diagnostics → “Check focus in 5 s”, click into another app and type; the result is in the report',
+    requires: (_l, s) =>
+      s.focusCheck?.includes('foreground') ? null : 'run the focus check first',
+  },
+  {
     id: 'helper-running',
     label:
       'Window helper fix: NO amber “Window helper unavailable” banner; process names are back in the Windows tab',

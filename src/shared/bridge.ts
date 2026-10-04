@@ -24,6 +24,7 @@ export interface ControlApi {
   setFillMode(mode: FillMode): Promise<void>;
   setCrop(crop: CropRect | null): Promise<void>;
   action(action: PresenterAction): Promise<void>;
+  focusCheck(delaySeconds: number): Promise<void>;
 }
 
 export interface OutputApi {

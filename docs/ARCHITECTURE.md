@@ -153,17 +153,22 @@ ones) therefore lose the content. `FullscreenFollower` (`src/main/fullscreenFoll
   aware.
 - `chooseFollow()` (pure, unit-tested): picked window itself full screen → keep it (Chrome/Edge);
   another full-screen window of the same process → follow it (PowerPoint `PodiumParent` / Presenter
-  View excluded); else the picked window. `Stabilizer` needs the same decision twice (~600 ms) so
+  View excluded; WMP's transient `WMPTransition` window skipped); else the picked window. Among
+  several candidates, real content windows beat overlays (`overlayScore`: transparent > layered >
+  tool window > no-activate rank last), so a player's click-through full-screen controls bar isn't
+  captured instead of the video. `Stabilizer` needs the same decision twice (~600 ms) so
   enter/exit animations don't flap.
 - The engine keeps two descriptors: `projection.source` (what the presenter picked, shown in the UI)
   and `effective` (what's captured). `followTo()` / `followBack()` switch `effective` with the
   normal fade; the display-media handler always grants `effective`.
-- If the followed window's capture errors or is black (exclusive/independent-flip presentation),
-  it falls back once to that monitor's **screen** source (physical rect → `screenToDipRect` →
+- If the followed window's capture errors, or stays black for two consecutive checks (~2 s; a
+  single black frame while entering full screen is normal), it falls back once to that monitor's
+  **screen** source (physical rect → `screenToDipRect` →
   display → screen source); never to the projector's own screen without capture exclusion.
   "Ended" from a followed window is not "Source closed": the next polls switch back.
-- Every switch, and every capture error on a window source, logs all top-level windows of the app
-  (`inspect` op) for diagnosing other players.
+- Every decision, switch, and capture error logs a `Follow:` line (candidates with their style
+  flags; all top-level windows of the app via the `inspect` op). Copy report includes the last 30
+  as a "Follow full screen trace", whatever their log level.
 
 ## Recursive-mirror prevention
 

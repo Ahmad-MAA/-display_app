@@ -41,6 +41,8 @@ export class ElectronOutputEngine {
   private display: OutputDisplay = DEFAULT_DISPLAY;
   private controls: PresenterControls = DEFAULT_CONTROLS;
   private stats: EngineStats | null = null;
+  private statsEpoch = 0;
+  private statsWhileHidden = false;
   private cursorHideSupported: boolean | null = null;
   /** Projection session being measured (one per capture token). */
   private session: {
@@ -92,6 +94,7 @@ export class ElectronOutputEngine {
       freeze,
       statsOverlay,
       refreshRate: this.refreshRate(),
+      statsEpoch: this.statsEpoch,
     });
   }
 
@@ -120,9 +123,13 @@ export class ElectronOutputEngine {
   /** Cursor capture is a getDisplayMedia constraint, so changing it restarts the capture. */
   setCursor(on: boolean): void {
     if (on === this.controls.cursor) return;
+    if (!on && this.cursorHideSupported === false) {
+      log('info', 'Hide cursor requested, but this capture path ignores it (Phase 1 limit)');
+      this.onChange(this.projection);
+      return;
+    }
     log('info', `Cursor ${on ? 'shown' : 'hidden'}`);
     this.controls = { ...this.controls, cursor: on };
-    this.cursorHideSupported = null;
     if (this.effective) {
       this.startCapture(this.effective);
       this.set({ ...this.projection, state: 'starting', token: this.token });
@@ -140,6 +147,29 @@ export class ElectronOutputEngine {
   /** Stats from the Output for the current capture (once per second). */
   handleStats(r: OutputStatsReport): void {
     if (r.token !== this.token) return;
+    // A hidden Output (unplugged projector, emergency hide) composites almost nothing, so
+    // presentedFrames gaps look like massive drops. Those numbers are meaningless: discard
+    // them and don't let them into the session verdict.
+    if (!this.output.isVisible) {
+      this.statsWhileHidden = true;
+      if (this.stats) {
+        this.stats = null;
+        this.onChange(this.projection);
+      }
+      if (this.session) {
+        this.session.last = null;
+        this.session.latencies = [];
+        this.session.startedAt = Date.now();
+      }
+      return;
+    }
+    if (this.statsWhileHidden) {
+      // Visible again: have the Output restart its counters; skip this polluted report.
+      this.statsWhileHidden = false;
+      this.statsEpoch++;
+      this.sendControls();
+      return;
+    }
     const stats: EngineStats = {
       deliveredFps: r.deliveredFps,
       droppedFrames: r.droppedFrames,
@@ -318,8 +348,8 @@ export class ElectronOutputEngine {
     log(
       'info',
       info.mode === 'window'
-        ? `Following full-screen window "${info.title}" (${target.sourceId})`
-        : `Full-screen window "${info.title}" can't be window-captured; capturing ${info.screenLabel ?? 'its screen'} instead`,
+        ? `Follow: capturing full-screen window "${info.title}" (${target.sourceId})`
+        : `Follow: full-screen window "${info.title}" can't be window-captured; capturing ${info.screenLabel ?? 'its screen'} instead`,
     );
     this.startCapture(target);
     this.set({
@@ -336,7 +366,7 @@ export class ElectronOutputEngine {
   followBack(): void {
     const picked = this.projection.source;
     if (!picked || !this.projection.following) return;
-    log('info', `Full screen ended; back to "${picked.title}"`);
+    log('info', `Follow: full screen ended; back to "${picked.title}"`);
     this.startCapture(picked);
     this.set({
       ...this.projection,
@@ -361,7 +391,7 @@ export class ElectronOutputEngine {
       if (s.state === 'ended' || s.state === 'error') {
         log(
           'warn',
-          `Followed full-screen window "${title}": capture ${s.state} (${s.errorName ?? ''})`,
+          `Follow: followed window "${title}": capture ${s.state} (${s.errorName ?? ''})`,
         );
         this.onFollowProblem?.(s.state);
         return;
@@ -377,7 +407,13 @@ export class ElectronOutputEngine {
           if (hidden !== this.cursorHideSupported) {
             this.cursorHideSupported = hidden;
             if (hidden === false) {
-              log('warn', `Cursor hiding not honored by this capture (cursor: ${s.cursor ?? '?'})`);
+              // Chromium accepted cursor:'never' but still draws it. Don't keep a toggle
+              // that does nothing: show the cursor state truthfully from now on.
+              log(
+                'warn',
+                `Hide cursor isn't supported by Chromium's capture (it reported cursor: ${s.cursor ?? '?'}); the cursor stays visible. Needs the native engine.`,
+              );
+              this.controls = { ...this.controls, cursor: true };
             }
           }
         }

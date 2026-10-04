@@ -102,3 +102,26 @@ follow/covering code was added. Everything helper-based was silently off in that
 names "0 with process name", minimized windows, Follow full screen, covering warning).
 Fix: script written to userData and run via a short ScriptBlock bootstrap (<2,000 chars);
 helper failures now show a Control Panel banner and appear in Copy report. Re-test needed.
+
+# Step 6 hardware check — results
+
+Same hardware, 2026-10-04. Window helper fix PASS (process names back), covering warning PASS,
+B / F / S / M / Esc PASS, global hotkeys PASS (Ctrl+Alt+PgDn/PgUp switched sources while WMP stayed
+full screen).
+
+- **C (hide cursor) FAIL**: log `cursor: always`. Chromium accepts `cursor: 'never'` but draws the
+  cursor anyway; no Phase 1 workaround. The button now reports this instead of toggling.
+- **WMP Follow full screen regressed** (blank / stuck frame). The report only carried warnings,
+  so the follower's decisions weren't visible. Changes: candidates ranked so transparent/layered
+  overlays (a player's full-screen controls bar) lose to the real video window; screen fallback
+  needs black to persist ~2 s; every follower step is logged with `Follow:` and included in Copy
+  report. Re-test needed.
+- **Blinking caret in the projected app while typing elsewhere**: ProjectorDesk only moves focus
+  after restoring a minimized card. Added Diagnostics → "Check focus in 5 s" (foreground window +
+  GetGUIThreadInfo of the projected window's thread) to show whether Windows gives it focus.
+- Sessions: median latency ~25 ms (≈1.5 frames) on every session → above the one-frame budget.
+  That's the Phase 2 evidence; it's now logged once as a warning, sessions < 10 s are ignored.
+- Rapid Esc presses raced a placement ("not in full-screen mode" error); a hide now cancels an
+  in-flight placement and keeps the Output hidden.
+- Stats were bogus while the Output was hidden (no compositing → huge "drops"); now discarded,
+  and counters restart when it's visible again.

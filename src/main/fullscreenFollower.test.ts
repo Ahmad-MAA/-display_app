@@ -24,6 +24,11 @@ const win = (o: Partial<WinInfo>): WinInfo => ({
   fullscreen: false,
   topmost: false,
   coverage: 0,
+  layered: false,
+  transparent: false,
+  toolWindow: false,
+  noActivate: false,
+  exStyle: '0x0',
   rect: { x: 10, y: 10, width: 800, height: 600 },
   monitor: mon,
   ...o,
@@ -102,6 +107,8 @@ describe('FullscreenFollower', () => {
     await poll(1);
     expect(t.calls).toEqual(['to window:2:0 window']);
 
+    t.engine.onFollowProblem?.('blank');
+    expect(t.calls).toEqual(['to window:2:0 window']); // one black report: maybe the enter animation
     t.engine.onFollowProblem?.('blank');
     expect(t.calls).toEqual(['to window:2:0 window', 'to screen:0:0 screen']);
     t.engine.onFollowProblem?.('blank'); // only one fallback per window

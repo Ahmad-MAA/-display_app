@@ -17,6 +17,11 @@ const win = (o: Partial<WinInfo>): WinInfo => ({
   fullscreen: false,
   topmost: false,
   coverage: 0,
+  layered: false,
+  transparent: false,
+  toolWindow: false,
+  noActivate: false,
+  exStyle: '0x0',
   rect: { x: 100, y: 100, width: 800, height: 600 },
   monitor: mon,
   ...o,
@@ -58,6 +63,22 @@ describe('chooseFollow', () => {
     const real = win({ hwnd: '3', title: 'Windows Media Player', fullscreen: true });
     expect(chooseFollow(main, [transition, real], null)).toEqual({ kind: 'window', win: real });
     expect(chooseFollow(main, [transition], null)).toEqual({ kind: 'primary' });
+  });
+
+  it('prefers the real video window over a transparent full-screen controls overlay above it', () => {
+    const overlay = win({
+      hwnd: '2',
+      fullscreen: true,
+      topmost: true,
+      layered: true,
+      transparent: true,
+    });
+    const video = win({ hwnd: '3', fullscreen: true });
+    expect(chooseFollow(main, [overlay, video], null)).toEqual({ kind: 'window', win: video });
+    // ...and moves off an overlay it was already following once the real window shows up
+    expect(chooseFollow(main, [overlay, video], '2')).toEqual({ kind: 'window', win: video });
+    // an overlay alone is still followed (better than nothing; screen fallback covers black)
+    expect(chooseFollow(main, [overlay], null)).toEqual({ kind: 'window', win: overlay });
   });
 
   it('sticks with the window already being followed', () => {

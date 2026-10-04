@@ -33,6 +33,8 @@ export interface ControlInvokeMap {
   'output:set-crop': { args: [crop: CropRect | null]; result: void };
   /** Presenter controls / hotkey actions (same path as global hotkeys). */
   'output:action': { args: [action: PresenterAction]; result: void };
+  /** Wait `delaySeconds`, then check whether the projected window thinks it has focus. */
+  'diagnostics:focus-check': { args: [delaySeconds: number]; result: void };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -60,6 +62,8 @@ export interface OutputEventMap {
 
 export interface OutputControls extends Omit<PresenterControls, 'cursor'> {
   refreshRate: number;
+  /** Bumped when stats must restart from zero (e.g. the Output was hidden). */
+  statsEpoch: number;
 }
 
 export interface OutputStatsReport extends EngineStats {
@@ -93,6 +97,7 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'output:set-fill-mode',
   'output:set-crop',
   'output:action',
+  'diagnostics:focus-check',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

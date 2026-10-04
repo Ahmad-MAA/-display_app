@@ -68,6 +68,11 @@ function toWinInfo(v: unknown): WinInfo | null {
     owned: bool('owned'),
     fullscreen: bool('fullscreen'),
     topmost: bool('topmost'),
+    layered: bool('layered'),
+    transparent: bool('transparent'),
+    toolWindow: bool('toolWindow'),
+    noActivate: bool('noActivate'),
+    exStyle: str('exStyle'),
     coverage: typeof w['coverage'] === 'number' ? w['coverage'] : 0,
     rect: toRect(w['rect']),
     monitor: toRect(w['monitor']),
@@ -302,6 +307,12 @@ export class WindowHelper {
   /** Windows above `outputHwnd` covering ≥25% of its monitor, topmost first. */
   async covering(outputHwnd: string): Promise<WinInfo[]> {
     return toWinList(await this.request({ op: 'covering', hwnd: outputHwnd }));
+  }
+
+  /** Foreground window + the target thread's active/focus/caret state (null if unavailable). */
+  async focus(hwnd: string): Promise<Record<string, unknown> | null> {
+    const r = await this.request({ op: 'focus', hwnd });
+    return r && typeof r === 'object' ? (r as Record<string, unknown>) : null;
   }
 
   /** Diagnostics: every top-level window of the process owning `hwnd`. */

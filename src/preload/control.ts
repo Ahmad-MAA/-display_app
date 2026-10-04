@@ -41,6 +41,7 @@ const api: ControlApi = {
   setFillMode: (mode) => invoke('output:set-fill-mode', mode),
   setCrop: (crop) => invoke('output:set-crop', crop),
   action: (a) => invoke('output:action', a),
+  focusCheck: (delaySeconds) => invoke('diagnostics:focus-check', delaySeconds),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

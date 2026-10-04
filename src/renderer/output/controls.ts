@@ -18,6 +18,7 @@ let controls: OutputControls = {
   freeze: false,
   statsOverlay: false,
   refreshRate: 60,
+  statsEpoch: 0,
 };
 const stats = new FrameStats();
 let token = 0;
@@ -81,6 +82,7 @@ setInterval(() => {
 
 function apply(c: OutputControls): void {
   const wasFrozen = controls.freeze;
+  if (c.statsEpoch !== controls.statsEpoch) stats.reset();
   controls = c;
   blankEl.classList.toggle('on', c.blank);
   if (c.freeze && !wasFrozen) video.pause();

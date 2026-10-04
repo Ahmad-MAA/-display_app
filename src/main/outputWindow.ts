@@ -66,6 +66,8 @@ export class OutputWindow {
    * the user was changing scale/resolution).
    */
   private stale = false;
+  /** Bumped by hide(); a placement that sees it change was superseded and stops quietly. */
+  private hideGeneration = 0;
   private placing: Promise<void> = Promise.resolve();
   private readonly ready: Promise<void>;
 
@@ -109,6 +111,7 @@ export class OutputWindow {
   }
 
   hide(): void {
+    this.hideGeneration++;
     if (this.win.isDestroyed()) return;
     if (this.win.isFullScreen()) this.win.setFullScreen(false);
     this.win.hide();
@@ -189,6 +192,8 @@ export class OutputWindow {
     const win = this.win;
     if (win.isDestroyed()) return;
     this.stale = true;
+    const generation = this.hideGeneration;
+    const superseded = () => generation !== this.hideGeneration || win.isDestroyed();
     const target = { ...display.bounds };
     const primary = screen.getPrimaryDisplay();
     let corrected = false;
@@ -207,12 +212,20 @@ export class OutputWindow {
     const first = this.setBoundsVerified(target, roundingScale, 'windowed');
     if (first.corrected) corrected = true;
 
+    if (superseded()) {
+      this.stopSuperseded();
+      return;
+    }
     // 2) Show without stealing focus from the Control Panel, then go full screen.
     if (!win.isVisible()) win.showInactive();
     win.setFullScreen(true);
     await waitFor(win, 'enter-full-screen');
     await delay(50);
 
+    if (superseded()) {
+      this.stopSuperseded();
+      return;
+    }
     // 3) Verify full-screen bounds and that Windows put us on the right monitor.
     let actual = win.getBounds();
     let matched = screen.getDisplayMatching(actual).id;
@@ -232,6 +245,10 @@ export class OutputWindow {
       matched = screen.getDisplayMatching(actual).id;
     }
 
+    if (superseded()) {
+      this.stopSuperseded();
+      return;
+    }
     const problems: string[] = [];
     if (!rectEquals(actual, target)) {
       problems.push(
@@ -268,6 +285,15 @@ export class OutputWindow {
     );
     this.onReport(report);
     this.scheduleViewportCheck();
+  }
+
+  /** A hide() arrived while placing (e.g. Esc pressed quickly): make sure it stays hidden. */
+  private stopSuperseded(): void {
+    log('info', 'Placement superseded by hide; stopping');
+    if (this.win.isDestroyed()) return;
+    if (this.win.isFullScreen()) this.win.setFullScreen(false);
+    this.win.hide();
+    this.stale = false;
   }
 
   /** Combine main-side bounds checks with what the renderer reports in physical pixels. */

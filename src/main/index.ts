@@ -27,6 +27,7 @@ let coverWatcher: CoverWatcher | null = null;
 let hotkeys: HotkeyStatus[] = [];
 /** Emergency hide (Esc / Ctrl+Alt+H): keep the Output hidden until shown again. */
 let outputHiddenByUser = false;
+let focusCheck: string | null = null;
 let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
@@ -69,6 +70,7 @@ function state(): AppState {
     hotkeys,
     outputHiddenByUser,
     sessions: recentSessions(),
+    focusCheck,
   };
 }
 
@@ -298,6 +300,45 @@ function setOutputHidden(hidden: boolean): void {
   }
 }
 
+/**
+ * Is the projected window acting as if it had keyboard focus while another app is in front?
+ * Reads Windows' foreground window and GetGUIThreadInfo for the projected window's thread.
+ * ProjectorDesk itself only moves focus after restoring a minimized card (back to the panel).
+ */
+async function runFocusCheck(): Promise<void> {
+  const src = engine?.current.source;
+  const hwnd = src?.kind === 'window' ? src.hwnd : null;
+  let msg: string;
+  if (!hwnd || !windowHelper?.available) {
+    msg = hwnd ? 'window helper unavailable' : 'project a window first';
+  } else {
+    const f = await windowHelper.focus(hwnd);
+    if (!f) {
+      msg = 'helper query failed';
+    } else {
+      const str = (k: string): string | null => {
+        const v = f[k];
+        return typeof v === 'string' ? v : null;
+      };
+      const fg = f['targetIsForeground'] === true;
+      const caret = str('caretHwnd');
+      msg =
+        `projected "${src?.title ?? '?'}" is ${fg ? '' : 'NOT '}the foreground window ` +
+        `(foreground: "${str('foregroundTitle') ?? '?'}" / ${str('foregroundProcess') ?? '?'}); ` +
+        `its thread: active=${str('threadActiveHwnd') ?? 'none'}, focus=${str('threadFocusHwnd') ?? 'none'}, ` +
+        `system caret=${caret ? (f['caretBlinking'] === true ? `${caret} (blinking)` : `${caret} (hidden)`) : 'none'}. ` +
+        (fg
+          ? 'Windows considers the projected app ACTIVE: it really has focus.'
+          : caret && f['caretBlinking'] === true
+            ? 'Windows does not give it focus, but its thread keeps a blinking system caret: the app shows the caret itself.'
+            : 'Windows does not give it focus; any caret seen is drawn by the app itself, not caused by ProjectorDesk.');
+    }
+  }
+  focusCheck = `${new Date().toLocaleTimeString()}: ${msg}`;
+  log('info', `Focus check: ${msg}`);
+  pushState();
+}
+
 /** One entry point for buttons, Control Panel keys and global hotkeys. */
 function runAction(a: PresenterAction): void {
   if (!engine) return;
@@ -422,6 +463,12 @@ function registerIpc(): void {
   });
   handle('output:set-crop', controlWc, (crop) => {
     engine?.setCrop(crop);
+  });
+  handle('diagnostics:focus-check', controlWc, (delaySeconds) => {
+    const ms = Math.min(Math.max(Number.isFinite(delaySeconds) ? delaySeconds : 0, 0), 30) * 1000;
+    focusCheck = `checking in ${ms / 1000} s: switch to the app you're typing in…`;
+    pushState();
+    setTimeout(() => void runFocusCheck(), ms);
   });
   handle('output:action', controlWc, (a) => {
     runAction(a);

@@ -84,7 +84,9 @@ The same toggles are buttons in _Now projecting_.
   **Why PgUp/PgDn:** many Intel graphics drivers rotate the screen on Ctrl+Alt+Arrow. Hotkeys
   become configurable in step 7. If another app already owns a combination, Diagnostics →
   Global hotkeys says so and the button / panel key still works.
-- **Hide cursor**: Chromium may ignore it for some sources; the panel tells you when it did.
+- **Hide cursor**: not possible in Phase 1. Chromium accepts the request but always draws the
+  cursor (seen on hardware: `cursor: always`); after the first attempt the button says so. The
+  native engine (`IsCursorCaptureEnabled = false`) fixes this.
 - **Stats**: delivered fps, dropped frames, capture-to-display latency and processing time,
   measured on the Output. Every projection is summarized in `logs/sessions.jsonl`; sessions with
   median latency above one frame or more than 2% dropped frames are flagged as evidence for the
@@ -211,4 +213,8 @@ event), then **Copy report**.
 - Phase 1 output is SDR only. HDR sources are tone-mapped.
 - Content protection (recursive-mirror prevention) needs Windows 10 2004+. On older builds the app shows a persistent warning.
 - A window that is always-on-top on the projector display (e.g. a slide show with Presenter View) covers the Output. ProjectorDesk warns, but can't push it away; see "Slide shows" above.
+- The mouse cursor is always captured in Phase 1 (Chromium ignores "hide cursor").
+- Phase 1 capture-to-display latency measured on hardware is ~25 ms median (≈1.5 frames at
+  60 Hz), above the one-frame target; every session is recorded in `logs/sessions.jsonl` as
+  evidence for the native engine.
 - Restoring a minimized window that was maximized brings it to the front on your laptop screen (Windows can only re-maximize by activating it). The Control Panel takes focus back immediately.

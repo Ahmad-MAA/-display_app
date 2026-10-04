@@ -34,6 +34,8 @@ export class FullscreenFollower {
   private readonly stable = new Stabilizer(2);
   private followed: WinInfo | null = null;
   private fellBackFor: string | null = null;
+  /** Consecutive black-frame reports from the followed window. */
+  private blankCount = 0;
 
   constructor(
     private readonly helper: WindowHelper,
@@ -73,6 +75,7 @@ export class FullscreenFollower {
     this.stable.reset();
     this.followed = null;
     this.fellBackFor = null;
+    this.blankCount = 0;
     if (!this.on || !this.picked || !this.helper.available) return;
     this.timer = setInterval(() => void this.tick(), POLL_MS);
     void this.tick();
@@ -92,10 +95,15 @@ export class FullscreenFollower {
       if (!res || picked !== this.picked || !this.timer) return;
       const decision = chooseFollow(res.target, res.fullscreen, this.followed?.hwnd ?? null);
       if (!this.stable.push(decisionKey(decision))) return;
+      log(
+        'info',
+        `Follow: decision ${decisionKey(decision)}; picked window ${describeWindows([res.target])}; full-screen candidates: ${res.fullscreen.length ? describeWindows(res.fullscreen) : 'none'}`,
+      );
       if (decision.kind === 'window') {
         const w = decision.win;
         this.followed = w;
         this.fellBackFor = null;
+        this.blankCount = 0;
         const title = w.title || picked.title;
         void this.diagnose(`${w.processName ?? 'app'} went full screen in a separate window`);
         this.engine.followTo(
@@ -122,13 +130,20 @@ export class FullscreenFollower {
   /** The followed window's capture failed or is black: capture its screen instead (once). */
   private onProblem(p: FollowProblem): void {
     const w = this.followed;
+    log('info', `Follow: followed window reported "${p}"`);
     // 'ended' = the full-screen window closed; the next polls switch back to the picked window.
     if (p === 'ended' || !w?.monitor || this.fellBackFor === w.hwnd) return;
+    // Players often show a black frame while entering full screen: only fall back to the
+    // screen if black persists (two reports, ~2 s apart). Errors fall back immediately.
+    if (p === 'blank' && ++this.blankCount < 2) return;
     this.fellBackFor = w.hwnd;
     const screen = this.findScreen(w.monitor);
     void this.diagnose(`window capture of the full-screen window gave ${p}`);
     if (!screen) {
-      log('warn', `No usable screen source for the full-screen window's monitor; staying on it`);
+      log(
+        'warn',
+        `Follow: no usable screen source for the full-screen window's monitor; staying on it`,
+      );
       return;
     }
     this.engine.followTo(screen.descriptor, {
@@ -144,6 +159,6 @@ export class FullscreenFollower {
     if (!hwnd || !this.helper.available) return;
     const list = await this.helper.inspect(hwnd);
     if (list.length > 0)
-      log('info', `Windows of the projected app (${reason}): ${describeWindows(list)}`);
+      log('info', `Follow: windows of the projected app (${reason}): ${describeWindows(list)}`);
   }
 }

@@ -610,6 +610,17 @@ export function App() {
                   ))}
                 </ul>
               </Card>
+              <Card title="Focus check (blinking caret)">
+                <p className="mb-2 text-xs text-slate-400">
+                  Project the app that shows a caret, click below, then within 5 s click into the
+                  app you’re typing in and type. The result says whether Windows thinks the
+                  projected window has focus.
+                </p>
+                <Button onClick={() => void api.focusCheck(5)}>Check focus in 5 s</Button>
+                {state.focusCheck && (
+                  <p className="mt-2 font-mono text-[11px] text-slate-300">{state.focusCheck}</p>
+                )}
+              </Card>
               <Card title="Recent sessions (Phase 2 evidence)">
                 {state.sessions.length === 0 ? (
                   <p className="text-xs text-slate-500">
