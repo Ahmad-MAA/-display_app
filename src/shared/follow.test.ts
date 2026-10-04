@@ -15,6 +15,8 @@ const win = (o: Partial<WinInfo>): WinInfo => ({
   cloaked: false,
   owned: false,
   fullscreen: false,
+  topmost: false,
+  coverage: 0,
   rect: { x: 100, y: 100, width: 800, height: 600 },
   monitor: mon,
   ...o,
@@ -49,6 +51,13 @@ describe('chooseFollow', () => {
     const show = win({ hwnd: '3', className: 'screenClass', fullscreen: true });
     expect(chooseFollow(ppt, [presenter, show], null)).toEqual({ kind: 'window', win: show });
     expect(chooseFollow(ppt, [presenter], null)).toEqual({ kind: 'primary' });
+  });
+
+  it('skips WMP’s short-lived transition window (avoids a black gap)', () => {
+    const transition = win({ hwnd: '2', title: 'WMPTransition', fullscreen: true });
+    const real = win({ hwnd: '3', title: 'Windows Media Player', fullscreen: true });
+    expect(chooseFollow(main, [transition, real], null)).toEqual({ kind: 'window', win: real });
+    expect(chooseFollow(main, [transition], null)).toEqual({ kind: 'primary' });
   });
 
   it('sticks with the window already being followed', () => {

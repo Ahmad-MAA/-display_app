@@ -22,9 +22,19 @@ export interface WinInfo {
   cloaked: boolean;
   owned: boolean;
   fullscreen: boolean;
+  /** WS_EX_TOPMOST: stays above normal windows (incl. our Output). */
+  topmost: boolean;
+  /** Covering op only: % of the projector monitor this window covers. */
+  coverage: number;
   rect: Rect | null;
   monitor: Rect | null;
 }
+
+/**
+ * Short-lived windows apps show while switching to full screen. Following one gives a
+ * black gap when it closes (seen on hardware: WMP's "WMPTransition").
+ */
+const TRANSIENT_TITLES = new Set(['WMPTransition']);
 
 /** Full-screen windows that must never be followed. */
 const IGNORED_CLASSES = new Set([
@@ -55,7 +65,8 @@ export function chooseFollow(
       w.fullscreen &&
       w.hwnd !== target.hwnd &&
       w.pid === target.pid &&
-      !IGNORED_CLASSES.has(w.className),
+      !IGNORED_CLASSES.has(w.className) &&
+      !TRANSIENT_TITLES.has(w.title),
   );
   const first = candidates[0];
   if (!first) return { kind: 'primary' };

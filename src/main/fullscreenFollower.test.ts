@@ -22,6 +22,8 @@ const win = (o: Partial<WinInfo>): WinInfo => ({
   cloaked: false,
   owned: false,
   fullscreen: false,
+  topmost: false,
+  coverage: 0,
   rect: { x: 10, y: 10, width: 800, height: 600 },
   monitor: mon,
   ...o,

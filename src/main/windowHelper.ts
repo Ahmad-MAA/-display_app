@@ -47,6 +47,8 @@ function toWinInfo(v: unknown): WinInfo | null {
     cloaked: bool('cloaked'),
     owned: bool('owned'),
     fullscreen: bool('fullscreen'),
+    topmost: bool('topmost'),
+    coverage: typeof w['coverage'] === 'number' ? w['coverage'] : 0,
     rect: toRect(w['rect']),
     monitor: toRect(w['monitor']),
   };
@@ -248,6 +250,11 @@ export class WindowHelper {
     const r = result as Record<string, unknown>;
     const target = toWinInfo(r['target']);
     return target ? { target, fullscreen: toWinList(r['fullscreen']) } : null;
+  }
+
+  /** Windows above `outputHwnd` covering ≥25% of its monitor, topmost first. */
+  async covering(outputHwnd: string): Promise<WinInfo[]> {
+    return toWinList(await this.request({ op: 'covering', hwnd: outputHwnd }));
   }
 
   /** Diagnostics: every top-level window of the process owning `hwnd`. */

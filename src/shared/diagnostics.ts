@@ -1,4 +1,5 @@
 import type { DisplayInfo, Rect } from './displays';
+import type { CoveringWindow } from './covering';
 import type { ProjectionInfo } from './projection';
 
 export interface ContentProtectionStatus {
@@ -90,4 +91,6 @@ export interface AppState {
   projection: ProjectionInfo;
   /** Follow the projected app's separate full-screen window (WMP, VLC, slide shows). */
   followFullscreen: boolean;
+  /** Other apps' windows above the Output on the projector display (empty = fine). */
+  coveredBy: CoveringWindow[];
 }

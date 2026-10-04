@@ -10,6 +10,7 @@
  *   {"op":"restore","hwnd":"123"}       → {"ok":true,"result":{"restored":true,"activated":false}}
  *   {"op":"follow","hwnd":"123"}        → {"ok":true,"result":{"target":{…},"fullscreen":[{…}]}}
  *   {"op":"inspect","hwnd":"123"}       → {"ok":true,"result":[{…every top-level window of that process…}]}
+ *   {"op":"covering","hwnd":"123"}      → {"ok":true,"result":[{…windows above HWND 123 covering ≥25% of its monitor…}]}
  * Failures → {"ok":false,"error":"…"}
  */
 export const WINDOW_HELPER_SCRIPT = String.raw`
@@ -54,6 +55,9 @@ public class PdWinInfo {
   public bool cloaked { get; set; }
   public bool owned { get; set; }
   public bool fullscreen { get; set; }
+  public bool topmost { get; set; }
+  // Covering op only: percentage of the monitor this window covers.
+  public int coverage { get; set; }
   public PdRect rect { get; set; }
   public PdRect monitor { get; set; }
 }
@@ -89,6 +93,7 @@ public static class PdWin {
   struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
 
   const int GWL_STYLE = -16;
+  const int WS_EX_TOPMOST = 0x8;
   const int WS_MAXIMIZE = 0x01000000;
   const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
   const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -138,6 +143,7 @@ public static class PdWin {
     int cloaked;
     w.cloaked = DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, 4) == 0 && cloaked != 0;
     w.owned = GetWindow(h, GW_OWNER) != IntPtr.Zero;
+    w.topmost = (GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
     RECT r;
     if (DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) != 0) {
       GetWindowRect(h, out r);
@@ -170,6 +176,40 @@ public static class PdWin {
       return true;
     }, IntPtr.Zero);
     return res;
+  }
+
+  // Windows ABOVE the output window in the z-order (EnumWindows walks top-down and stops at it) that
+  // are visible, not cloaked, and cover at least 25% of the output's monitor. A topmost
+  // slide show (WPS/PowerPoint Presenter View) on the projector shows up here.
+  public static List<PdWinInfo> Covering(IntPtr output) {
+    List<PdWinInfo> list = new List<PdWinInfo>();
+    if (!IsWindow(output)) return list;
+    MONITORINFO mi = new MONITORINFO();
+    mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+    if (!GetMonitorInfo(MonitorFromWindow(output, MONITOR_DEFAULTTONEAREST), ref mi)) return list;
+    RECT m = mi.rcMonitor;
+    long monArea = (long)(m.right - m.left) * (m.bottom - m.top);
+    if (monArea <= 0) return list;
+    EnumWindows(delegate (IntPtr h, IntPtr l) {
+      if (h == output) return false; // everything below the Output can't cover it
+      if (!IsWindowVisible(h) || IsIconic(h)) return true;
+      int cloaked;
+      if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, 4) == 0 && cloaked != 0) return true;
+      RECT r;
+      if (DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) != 0) {
+        GetWindowRect(h, out r);
+      }
+      long w = Math.Min(r.right, m.right) - Math.Max(r.left, m.left);
+      long hgt = Math.Min(r.bottom, m.bottom) - Math.Max(r.top, m.top);
+      if (w <= 0 || hgt <= 0) return true;
+      int pct = (int)(w * hgt * 100 / monArea);
+      if (pct < 25) return true;
+      PdWinInfo info = Info(h);
+      info.coverage = pct;
+      list.Add(info);
+      return true;
+    }, IntPtr.Zero);
+    return list;
   }
 
   // Diagnostics: every top-level window of the target's process, visible or not.
@@ -278,6 +318,8 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
       $resp = @{ ok = $true; result = [PdWin]::Restore([IntPtr][long]$req.hwnd) }
     } elseif ($req.op -eq 'follow') {
       $resp = @{ ok = $true; result = [PdWin]::Follow([IntPtr][long]$req.hwnd) }
+    } elseif ($req.op -eq 'covering') {
+      $resp = @{ ok = $true; result = @([PdWin]::Covering([IntPtr][long]$req.hwnd)) }
     } elseif ($req.op -eq 'inspect') {
       $resp = @{ ok = $true; result = @([PdWin]::Inspect([IntPtr][long]$req.hwnd)) }
     } elseif ($req.op -eq 'minimized') {

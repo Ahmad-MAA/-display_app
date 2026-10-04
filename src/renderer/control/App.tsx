@@ -249,6 +249,25 @@ function DisplayBanners({ state }: { state: AppState }) {
           {result.message}
         </div>
       )}
+      {state.coveredBy.length > 0 && state.outputVisible && (
+        <div
+          role="alert"
+          className="rounded-md border border-rose-700 bg-rose-950/60 p-3 text-sm text-rose-200"
+        >
+          <strong>Another window is covering the projector.</strong> The audience sees{' '}
+          {state.coveredBy
+            .map(
+              (w) =>
+                `“${w.title}”${w.processName ? ` (${w.processName}` : ' ('}${w.topmost ? ', always on top' : ''}${w.fullscreen ? ', full screen' : ''})`,
+            )
+            .join(', ')}{' '}
+          instead of what you pick here.
+          <span className="mt-1 block text-rose-200/80">
+            Slide shows (WPS, PowerPoint): play the slide show on Monitor 1 and turn Presenter View
+            off, then project it from here. Otherwise move or close that window.
+          </span>
+        </div>
+      )}
       {p && !p.ok && state.outputVisible && (
         <div
           role="alert"

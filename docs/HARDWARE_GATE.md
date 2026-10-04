@@ -68,3 +68,24 @@ Issue found: **Windows Media Player full screen** showed only the window frame, 
 while in full screen failed with `NotReadableError`. WMP hides its main window and plays full
 screen in a separate window, which window capture doesn't follow. Fix: "Follow full screen"
 (see ARCHITECTURE.md). Awaiting re-test with WMP, VLC, Chrome/YouTube and PowerPoint.
+
+# Follow full screen — results
+
+Same hardware, 2026-10-04.
+
+| Check                                                              | Result   | Notes                                                                                           |
+| ------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| Windows Media Player full screen followed, back on exit            | PASS     | Log shows the follower briefly locking onto WMP's transient `WMPTransition` window; now skipped |
+| Chrome/Edge YouTube full screen                                    | PASS     | Same window, no follow needed                                                                   |
+| PowerPoint-style slide show follows (WPS, slide show on Monitor 1) | PASS     | —                                                                                               |
+| VLC                                                                | untested | —                                                                                               |
+
+Findings:
+
+- WMP leaves its own full screen when it loses focus (clicking the Control Panel). ProjectorDesk
+  only moves focus after restoring a minimized card; accepted as WMP behaviour. Step 6 hotkeys
+  must switch sources without taking focus.
+- WPS slide show with Presenter View is topmost on the projector and covers the Output. Added a
+  "covering the projector" warning; workaround documented (slide show on Monitor 1, Presenter View off).
+- Restoring a minimized-while-maximized window shows it maximized in front (expected: activation
+  is required to re-maximize).

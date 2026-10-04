@@ -7,9 +7,10 @@ import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
 import { ElectronOutputEngine } from './electronOutputEngine';
+import { CoverWatcher } from './coverWatcher';
 import { FullscreenFollower } from './fullscreenFollower';
 import { OutputWindow } from './outputWindow';
-import { ownHwnds, SourceService } from './sources';
+import { hwndOf, ownHwnds, SourceService } from './sources';
 import { WindowHelper } from './windowHelper';
 import { lockDownNavigation, loadPage, preloadPath } from './windows';
 
@@ -18,6 +19,7 @@ let output: OutputWindow | null = null;
 let sources: SourceService | null = null;
 let engine: ElectronOutputEngine | null = null;
 let follower: FullscreenFollower | null = null;
+let coverWatcher: CoverWatcher | null = null;
 const windowHelper = new WindowHelper();
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
@@ -48,10 +50,18 @@ function state(): AppState {
     primarySwaps,
     projection: engine?.current ?? IDLE_PROJECTION,
     followFullscreen: follower?.enabled ?? true,
+    coveredBy: coverWatcher?.current ?? [],
   };
 }
 
+function ourWindows(): BrowserWindow[] {
+  return [control, output?.win].filter(
+    (w): w is BrowserWindow => w !== null && w !== undefined && !w.isDestroyed(),
+  );
+}
+
 function pushState(): void {
+  coverWatcher?.setActive(output?.isVisible ?? false);
   sendToControl(controlWc(), 'state:changed', state());
 }
 
@@ -381,14 +391,17 @@ if (!app.requestSingleInstanceLock()) {
       if (src.isProjectorScreen && !output?.contentProtection.ok) return null;
       return { descriptor: src.descriptor, label: src.displayLabel ?? src.descriptor.title };
     });
+    coverWatcher = new CoverWatcher(
+      windowHelper,
+      () => (output && !output.win.isDestroyed() ? hwndOf(output.win) : null),
+      () => ownHwnds(ourWindows()),
+      () => {
+        pushState();
+      },
+    );
     sources = new SourceService(
       {
-        ownHwnds: () =>
-          ownHwnds(
-            [control, output?.win].filter(
-              (w): w is BrowserWindow => w !== null && w !== undefined && !w.isDestroyed(),
-            ),
-          ),
+        ownHwnds: () => ownHwnds(ourWindows()),
         projectorDisplayId: () => (output?.isVisible ? targetDisplayId : null),
         displayLabel: (id) => listDisplays().find((d) => String(d.id) === id)?.label ?? null,
       },
@@ -408,6 +421,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     sources?.dispose();
+    coverWatcher?.dispose();
     windowHelper.dispose();
     output?.destroy();
   });

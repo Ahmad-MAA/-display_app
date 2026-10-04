@@ -82,6 +82,26 @@ Copy report) so other players can be diagnosed.
 
 Hardware check: the four "Follow full screen" items in **Diagnostics → Hardware checks**.
 
+## Slide shows (WPS Office, PowerPoint): play them on Monitor 1
+
+With **Presenter View** on, WPS and PowerPoint put the slide show **always-on-top on the second
+monitor**, which is the projector. It then covers ProjectorDesk's Output window: the audience
+sees the slide show, and picking another source in ProjectorDesk seems to do nothing until the
+slide show ends. ProjectorDesk shows a red **"Another window is covering the projector"** warning
+when this happens.
+
+Workaround: let ProjectorDesk put the slides on the projector.
+
+- **WPS Office**: Slide Show → Set Up Show → _Show on_: **Monitor 1** (your laptop screen), and turn
+  **Presenter View off**.
+- **PowerPoint**: Slide Show tab → _Monitor_: **Primary Monitor**, and untick **Use Presenter View**.
+- Start the slide show, then pick the presentation window in ProjectorDesk. **Follow full screen**
+  switches to the slide-show window automatically.
+
+Players that leave full screen when they lose focus (Windows Media Player does when you click the
+Control Panel) can stay full screen if you switch sources with ProjectorDesk's global hotkeys
+(step 6), which don't take focus.
+
 ## Step 4 hardware check
 
 Click any card in **Sources** to put it on the projector. **Now projecting** (right column) shows
@@ -147,3 +167,5 @@ event), then **Copy report**.
 - DRM-protected content (Netflix, some players) shows as black.
 - Phase 1 output is SDR only. HDR sources are tone-mapped.
 - Content protection (recursive-mirror prevention) needs Windows 10 2004+. On older builds the app shows a persistent warning.
+- A window that is always-on-top on the projector display (e.g. a slide show with Presenter View) covers the Output. ProjectorDesk warns, but can't push it away; see "Slide shows" above.
+- Restoring a minimized window that was maximized brings it to the front on your laptop screen (Windows can only re-maximize by activating it). The Control Panel takes focus back immediately.

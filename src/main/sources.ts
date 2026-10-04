@@ -22,7 +22,7 @@ export interface SourceContext {
   displayLabel(displayId: string): string | null;
 }
 
-function hwndOf(win: { getMediaSourceId(): string }): string | null {
+export function hwndOf(win: { getMediaSourceId(): string }): string | null {
   const parsed = parseSourceId(win.getMediaSourceId());
   return parsed?.kind === 'window' ? parsed.hwnd : null;
 }
