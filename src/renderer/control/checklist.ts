@@ -35,9 +35,9 @@ export const HARDWARE_CHECKS: readonly {
     requires: () => null,
   },
   {
-    id: 'sources-minimized',
+    id: 'sources-minimized-v2',
     label:
-      'Step 3: minimize a window, come back — its card shows the “restore this window” hint; restore it and the thumbnail returns',
+      'Step 3: minimize a window, come back — its card STAYS, greyed out with “Minimized · restore this window”; restore it and the live thumbnail returns. Also: an app minimized before ProjectorDesk started is listed',
     requires: () => null,
   },
   {

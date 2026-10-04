@@ -72,8 +72,11 @@ the Control Panel is focused, and on **Refresh**. Run through the four "Step 3" 
 1. **Windows tab**: your open apps appear with live thumbnails, their icons, and the process
    name under the title (e.g. `POWERPNT`, `chrome`). ProjectorDesk itself is not listed.
    UWP/Store apps may show `ApplicationFrameHost`; that's how Windows hosts them.
-2. **Minimized window**: minimize an app, come back to the panel. Its card should say
-   "Nothing to show … restore this window". Restore it; the thumbnail returns within ~2 s.
+2. **Minimized window**: minimize an app, come back to the panel. Its card **stays**, greyed out
+   with its last thumbnail and "Minimized · Restore this window to project it". Restore it; the
+   live thumbnail returns within ~2 s. An app minimized _before_ ProjectorDesk started is listed
+   too (no thumbnail yet). Electron omits minimized windows, so these come from the window
+   helper (`IsIconic` via the hidden PowerShell process).
 3. **Screens tab**: both screens are listed; the projector screen carries
    "Output is on this screen".
 4. **Refresh + filter**: open a new app, return to the panel; it appears within ~2 s. Typing in

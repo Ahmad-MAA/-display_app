@@ -18,7 +18,8 @@ const VIEWPORT_SETTLE_MS = 400;
  * verify exactly afterwards.
  */
 function withinRounding(a: Rect, b: Rect, scaleFactor: number): boolean {
-  const tol = Math.max(1, Math.ceil(scaleFactor));
+  // +1: a move from a 100% to a 125% monitor was seen to read back 3 DIP off (961 → 964).
+  const tol = Math.ceil(scaleFactor) + 1;
   return (
     Math.abs(a.x - b.x) <= tol &&
     Math.abs(a.y - b.y) <= tol &&

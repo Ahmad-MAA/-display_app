@@ -14,6 +14,12 @@ export interface CaptureSource {
    * Windows cannot capture; occasionally DRM-protected content.
    */
   thumbnailBlank: boolean;
+  /**
+   * Window is minimized. Windows can't capture minimized windows and Electron omits them
+   * from getSources(), so these come from the window helper and show the last-seen
+   * thumbnail (if any), greyed out, with a "restore this window" hint.
+   */
+  minimized: boolean;
   /** Screen sources only: this screen hosts the Output window. */
   isProjectorScreen: boolean;
   /** Screen sources only: label of the matching display. */
@@ -97,4 +103,63 @@ export function filterSources(
         s.descriptor.title.toLowerCase().includes(q) ||
         (s.descriptor.processName?.toLowerCase().includes(q) ?? false)),
   );
+}
+
+/** A minimized top-level window reported by the native window helper. */
+export interface MinimizedWindow {
+  hwnd: string;
+  title: string;
+  processName: string | null;
+}
+
+/** Last good thumbnail/icon seen for a window while it was visible. */
+export interface SourceMemo {
+  thumbnail: string | null;
+  icon: string | null;
+}
+
+/**
+ * Merge minimized windows into the capturer's list so they stay visible (and pickable)
+ * instead of vanishing. Listed windows that are actually minimized get flagged; unlisted
+ * minimized windows are appended (after the live ones) using their last-seen thumbnail.
+ */
+export function mergeMinimized(
+  listed: readonly CaptureSource[],
+  minimized: readonly MinimizedWindow[],
+  memo: (hwnd: string) => SourceMemo | undefined,
+  own: ReadonlySet<string>,
+): CaptureSource[] {
+  const min = new Map(minimized.filter((w) => !own.has(w.hwnd)).map((w) => [w.hwnd, w]));
+  const seen = new Set<string>();
+  const out: CaptureSource[] = listed.map((s) => {
+    const hwnd = s.descriptor.hwnd;
+    if (!hwnd || !min.has(hwnd)) return s;
+    seen.add(hwnd);
+    const m = memo(hwnd);
+    const thumbnail = s.thumbnailBlank ? (m?.thumbnail ?? null) : s.thumbnail;
+    return { ...s, minimized: true, thumbnail, thumbnailBlank: thumbnail === null };
+  });
+  for (const w of min.values()) {
+    if (seen.has(w.hwnd)) continue;
+    const m = memo(w.hwnd);
+    const thumbnail = m?.thumbnail ?? null;
+    out.push({
+      descriptor: {
+        // Same id format Electron uses for windows, so it matches once restored.
+        sourceId: `window:${w.hwnd}:0`,
+        kind: 'window',
+        hwnd: w.hwnd,
+        displayId: null,
+        processName: w.processName,
+        title: w.title,
+      },
+      thumbnail,
+      icon: m?.icon ?? null,
+      thumbnailBlank: thumbnail === null,
+      minimized: true,
+      isProjectorScreen: false,
+      displayLabel: null,
+    });
+  }
+  return out;
 }

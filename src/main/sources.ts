@@ -1,8 +1,15 @@
 import { desktopCapturer, type DesktopCapturerSource, type NativeImage } from 'electron';
 import { parseSourceId } from '@shared/outputEngine';
-import { isBlankBitmap, toDescriptor, type CaptureSource, type SourceList } from '@shared/sources';
+import {
+  isBlankBitmap,
+  mergeMinimized,
+  toDescriptor,
+  type CaptureSource,
+  type SourceList,
+  type SourceMemo,
+} from '@shared/sources';
 import { log } from './log';
-import { ProcessNameResolver } from './processNames';
+import { WindowHelper } from './windowHelper';
 
 export const THUMBNAIL_SIZE = { width: 320, height: 180 } as const;
 const REFRESH_MS = 2000;
@@ -34,7 +41,9 @@ export function ownHwnds(windows: readonly { getMediaSourceId(): string }[]): Se
  * Control Panel is focused (getSources with thumbnails is not free), plus on demand.
  */
 export class SourceService {
-  private readonly names = new ProcessNameResolver();
+  private readonly helper = new WindowHelper();
+  /** Last good thumbnail/icon per HWND, shown while that window is minimized. */
+  private readonly memo = new Map<string, SourceMemo>();
   private timer: NodeJS.Timeout | null = null;
   private inFlight: Promise<SourceList> | null = null;
   private last: SourceList = { at: new Date(0).toISOString(), sources: [], error: null };
@@ -70,6 +79,8 @@ export class SourceService {
 
   private async enumerate(): Promise<SourceList> {
     let raw: DesktopCapturerSource[];
+    // Minimized windows are fetched in parallel: getSources() omits them on Windows.
+    const minimizedP = this.helper.minimized();
     try {
       raw = await desktopCapturer.getSources({
         types: ['window', 'screen'],
@@ -77,6 +88,7 @@ export class SourceService {
         fetchWindowIcons: true,
       });
     } catch (err) {
+      await minimizedP;
       const message = `Could not list windows and screens: ${String(err)}. If Windows privacy settings block screen capture for desktop apps, allow it and press Refresh.`;
       if (this.lastErrorLogged !== message) log('error', message);
       this.lastErrorLogged = message;
@@ -91,7 +103,7 @@ export class SourceService {
     const windowHwnds = raw
       .map((s) => parseSourceId(s.id))
       .flatMap((p) => (p?.kind === 'window' && !own.has(p.hwnd) ? [p.hwnd] : []));
-    const names = await this.names.resolve(windowHwnds);
+    const names = await this.helper.processNames(windowHwnds);
 
     const sources: CaptureSource[] = [];
     for (const s of raw) {
@@ -116,6 +128,7 @@ export class SourceService {
           : `data:image/jpeg;base64,${s.thumbnail.toJPEG(70).toString('base64')}`,
         icon: appIcon && !appIcon.isEmpty() ? appIcon.toDataURL() : null,
         thumbnailBlank: blank,
+        minimized: false,
         isProjectorScreen:
           descriptor.kind === 'screen' &&
           projectorId !== null &&
@@ -123,13 +136,30 @@ export class SourceService {
         displayLabel: descriptor.displayId ? this.ctx.displayLabel(descriptor.displayId) : null,
       });
     }
-    this.last = { at: new Date().toISOString(), sources, error: null };
+    const minimized = await minimizedP;
+    const merged = mergeMinimized(sources, minimized, (h) => this.memo.get(h), own);
+    this.updateMemo(merged);
+    this.last = { at: new Date().toISOString(), sources: merged, error: null };
     this.onList(this.last);
     return this.last;
   }
 
+  /** Remember visible windows' thumbnails; forget windows that no longer exist. */
+  private updateMemo(sources: readonly CaptureSource[]): void {
+    const present = new Set<string>();
+    for (const s of sources) {
+      const h = s.descriptor.hwnd;
+      if (!h) continue;
+      present.add(h);
+      if (!s.minimized && !s.thumbnailBlank) {
+        this.memo.set(h, { thumbnail: s.thumbnail, icon: s.icon });
+      }
+    }
+    for (const h of this.memo.keys()) if (!present.has(h)) this.memo.delete(h);
+  }
+
   dispose(): void {
     this.stopPolling();
-    this.names.dispose();
+    this.helper.dispose();
   }
 }

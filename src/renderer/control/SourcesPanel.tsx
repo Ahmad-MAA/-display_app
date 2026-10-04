@@ -40,22 +40,37 @@ function SourceCard({ source, protectionOk }: { source: CaptureSource; protectio
     <article
       className={`overflow-hidden rounded-lg border bg-slate-900 ${
         source.isProjectorScreen ? 'border-amber-600/70' : 'border-slate-800'
-      } ${disabled ? 'opacity-50' : ''}`}
-      title={d.title}
+      } ${disabled ? 'opacity-50' : ''} ${source.minimized ? 'border-dashed' : ''}`}
+      title={source.minimized ? `${d.title} (minimized)` : d.title}
     >
       <div className="relative aspect-video bg-black">
         {source.thumbnail && !source.thumbnailBlank && (
-          <img src={source.thumbnail} alt="" className="h-full w-full object-contain" />
+          <img
+            src={source.thumbnail}
+            alt=""
+            className={`h-full w-full object-contain ${source.minimized ? 'opacity-35 grayscale' : ''}`}
+          />
         )}
-        {source.thumbnailBlank && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-3 text-center text-xs text-amber-200">
-            <span className="font-semibold">Nothing to show</span>
-            <span className="text-amber-200/80">
-              {d.kind === 'window'
-                ? 'Minimized windows can’t be captured — restore this window. Protected (DRM) video also shows black.'
-                : 'This screen returned a black image.'}
-            </span>
+        {source.minimized ? (
+          <div className="absolute inset-0 flex items-center justify-center p-3">
+            <div className="flex max-w-[90%] flex-col items-center gap-1 rounded-md bg-black/75 px-3 py-2 text-center text-xs text-slate-200">
+              <span className="rounded bg-slate-600 px-1.5 py-0.5 font-semibold">Minimized</span>
+              <span>
+                Restore this window to project it. Windows can’t capture minimized windows.
+              </span>
+            </div>
           </div>
+        ) : (
+          source.thumbnailBlank && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-3 text-center text-xs text-amber-200">
+              <span className="font-semibold">Nothing to show</span>
+              <span className="text-amber-200/80">
+                {d.kind === 'window'
+                  ? 'This window returned a black image: protected (DRM) video, or a window that isn’t drawing.'
+                  : 'This screen returned a black image.'}
+              </span>
+            </div>
+          )
         )}
         {source.isProjectorScreen && (
           <span className="absolute left-2 top-2 rounded bg-amber-500/90 px-1.5 py-0.5 text-[11px] font-semibold text-black">
@@ -65,12 +80,18 @@ function SourceCard({ source, protectionOk }: { source: CaptureSource; protectio
       </div>
       <div className="flex items-center gap-2 px-2.5 py-2">
         {source.icon ? (
-          <img src={source.icon} alt="" className="h-4 w-4 shrink-0" />
+          <img
+            src={source.icon}
+            alt=""
+            className={`h-4 w-4 shrink-0 ${source.minimized ? 'opacity-50 grayscale' : ''}`}
+          />
         ) : (
           <span className="h-4 w-4 shrink-0 rounded-sm bg-slate-700" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm">{d.title || '(untitled)'}</p>
+          <p className={`truncate text-sm ${source.minimized ? 'text-slate-400' : ''}`}>
+            {d.title || '(untitled)'}
+          </p>
           <p className="truncate text-[11px] text-slate-500">
             {d.kind === 'window'
               ? (d.processName ?? 'unknown process')

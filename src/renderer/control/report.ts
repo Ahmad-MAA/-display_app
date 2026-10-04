@@ -30,10 +30,10 @@ function sourcesBlock(list: SourceList | null): string {
   const rows = list.sources
     .map(
       (s) =>
-        `| ${s.descriptor.kind} | ${s.descriptor.title.replace(/\|/g, '/').slice(0, 60)} | ${s.descriptor.processName ?? s.displayLabel ?? '—'} | ${s.descriptor.hwnd ?? s.descriptor.displayId ?? '—'} | ${s.icon ? '✓' : '—'} | ${s.thumbnailBlank ? 'BLANK' : 'ok'}${s.isProjectorScreen ? ' · projector' : ''} |`,
+        `| ${s.descriptor.kind} | ${s.descriptor.title.replace(/\|/g, '/').slice(0, 60)} | ${s.descriptor.processName ?? s.displayLabel ?? '—'} | ${s.descriptor.hwnd ?? s.descriptor.displayId ?? '—'} | ${s.icon ? '✓' : '—'} | ${s.minimized ? 'MINIMIZED' : s.thumbnailBlank ? 'BLANK' : 'ok'}${s.isProjectorScreen ? ' · projector' : ''} |`,
     )
     .join('\n');
-  return `${windows.length} windows (${named} with process name, ${windows.filter((s) => s.thumbnailBlank).length} blank), ${screens.length} screens; listed at ${list.at}
+  return `${windows.length} windows (${named} with process name, ${windows.filter((s) => s.minimized).length} minimized, ${windows.filter((s) => s.thumbnailBlank && !s.minimized).length} blank), ${screens.length} screens; listed at ${list.at}
 
 | kind | title | process / display | HWND / display id | icon | thumbnail |
 |---|---|---|---|---|---|

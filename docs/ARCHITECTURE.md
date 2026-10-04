@@ -41,12 +41,17 @@ calls. Thumbnails are sent as JPEG data URLs; icons as PNG.
 
 - **Own windows excluded** by HWND, from `BrowserWindow.getMediaSourceId()` of the Control Panel
   and Output windows.
-- **Blank thumbnails** (`isEmpty()` or a sampled all-black bitmap, `isBlankBitmap`) mark minimized
-  or protected windows; the card tells the user to restore the window.
+- **Minimized windows**: Electron's `getSources()` omits them on Windows (seen on hardware), so
+  they'd vanish from the grid. The window helper enumerates minimized top-level app windows
+  (`EnumWindows` + `IsIconic`; skips owned, tool and cloaked windows) in parallel with
+  `getSources()`. `mergeMinimized()` flags/append them with their last-seen thumbnail (a per-HWND
+  memo, pruned when the window disappears) so they stay visible and pickable, greyed out.
+- **Blank thumbnails** (`isEmpty()` or a sampled all-black bitmap, `isBlankBitmap`) on a window
+  that isn't minimized mean protected (DRM) video or a window that isn't drawing.
 - **Process names**: Electron doesn't expose them, but `SourceDescriptor.processName` needs them
-  for favourites and for a native engine. `src/main/processNames.ts` keeps one hidden PowerShell
-  process that P/Invokes `GetWindowThreadProcessId` and answers HWND batches as JSON lines;
-  results are cached per HWND. If PowerShell is unavailable the helper disables itself, logs
+  for favourites and for a native engine. `src/main/windowHelper.ts` keeps one hidden PowerShell
+  process (script in `windowHelper.ps1.ts`) that P/Invokes `GetWindowThreadProcessId` and
+  answers JSON requests line by line; names are cached per HWND. If PowerShell is unavailable the helper disables itself, logs
   once, and names fall back to null. No native Node module is involved.
 - Screen sources map `display_id` to our display list for labels and to flag the projector screen.
 
