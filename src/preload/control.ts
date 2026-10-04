@@ -33,6 +33,9 @@ const api: ControlApi = {
   setTargetDisplay: (displayId) => invoke('displays:set-target', displayId),
   extendDisplays: () => invoke('displays:extend'),
   onState: (cb: (s: ControlEventMap['state:changed']) => void) => on('state:changed', cb),
+  getSources: () => invoke('sources:get'),
+  refreshSources: () => invoke('sources:refresh'),
+  onSources: (cb) => on('sources:changed', cb),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

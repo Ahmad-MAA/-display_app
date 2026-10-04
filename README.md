@@ -7,9 +7,8 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 2 complete — display detection, Extend button and hot-plug verified on
-> hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).** Source selection and capture
-> come in later steps.
+> **Status: step 3 (source list) — awaiting hardware check.** Steps 1–2 passed on hardware
+> ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)). Projecting a source comes in step 4.
 
 ## Setup
 
@@ -63,6 +62,25 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Step 3 hardware check
+
+The **Sources** tab lists every capturable window and screen. It auto-refreshes every 2 s while
+the Control Panel is focused, and on **Refresh**. Run through the four "Step 3" items in
+**Diagnostics → Hardware checks**:
+
+1. **Windows tab**: your open apps appear with live thumbnails, their icons, and the process
+   name under the title (e.g. `POWERPNT`, `chrome`). ProjectorDesk itself is not listed.
+   UWP/Store apps may show `ApplicationFrameHost`; that's how Windows hosts them.
+2. **Minimized window**: minimize an app, come back to the panel. Its card should say
+   "Nothing to show … restore this window". Restore it; the thumbnail returns within ~2 s.
+3. **Screens tab**: both screens are listed; the projector screen carries
+   "Output is on this screen".
+4. **Refresh + filter**: open a new app, return to the panel; it appears within ~2 s. Typing in
+   the filter narrows by title or app name.
+
+**Copy report** now includes a table of every listed source (title, process, HWND, icon,
+blank-thumbnail flag), so paste that back too.
 
 ## Step 2 hardware check
 

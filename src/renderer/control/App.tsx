@@ -3,6 +3,7 @@ import type { AppState, ExtendResult, PlacementReport } from '@shared/diagnostic
 import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@shared/displays';
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
+import { SourcesPanel, useSources } from './SourcesPanel';
 import { useAppState, useLogs } from './useAppState';
 
 const api = window.projectorDesk;
@@ -388,6 +389,8 @@ function Checklist({
 export function App() {
   const state = useAppState();
   const logs = useLogs();
+  const sourceList = useSources();
+  const [view, setView] = useState<'sources' | 'diagnostics'>('sources');
   const [checks, setChecksState] = useState(loadChecks);
   const [copied, setCopied] = useState(false);
 
@@ -415,7 +418,7 @@ export function App() {
   const cp = state.contentProtection;
 
   const copyReport = async () => {
-    await navigator.clipboard.writeText(buildReport(state, checks, logs));
+    await navigator.clipboard.writeText(buildReport(state, checks, logs, sourceList));
     setCopied(true);
   };
 
@@ -455,45 +458,71 @@ export function App() {
         )}
         <DisplayBanners state={state} />
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-4">
+        <nav className="flex gap-4 border-b border-slate-800 text-sm">
+          {(['sources', 'diagnostics'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => {
+                setView(v);
+              }}
+              className={`-mb-px border-b-2 px-1 pb-2 ${
+                view === v
+                  ? 'border-sky-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {v === 'sources' ? 'Sources' : 'Diagnostics'}
+            </button>
+          ))}
+        </nav>
+
+        {view === 'sources' && (
+          <div className="grid items-start gap-4 lg:grid-cols-[1fr_340px]">
+            <SourcesPanel list={sourceList} protection={cp} />
             <Card title="Projector">
               <ProjectorPicker state={state} />
             </Card>
-            <Card title="Output placement">
-              <PlacementCard p={state.placement} />
-            </Card>
           </div>
-          <Card
-            title="Hardware checks"
-            right={<span className="text-xs text-slate-500">saved locally</span>}
-          >
-            <Checklist state={state} checks={checks} setChecks={setChecks} />
-          </Card>
-        </div>
+        )}
 
-        <Card title="Displays">
-          <DisplaysTable displays={state.displays} targetId={state.targetDisplayId} />
-        </Card>
-
-        <Card title="Log">
-          <pre className="max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed">
-            {logs.map((l) => (
-              <div
-                key={`${l.at}-${l.message}`}
-                className={
-                  l.level === 'error'
-                    ? 'text-rose-300'
-                    : l.level === 'warn'
-                      ? 'text-amber-300'
-                      : 'text-slate-400'
-                }
+        {view === 'diagnostics' && (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card title="Output placement">
+                <PlacementCard p={state.placement} />
+              </Card>
+              <Card
+                title="Hardware checks"
+                right={<span className="text-xs text-slate-500">saved locally</span>}
               >
-                {l.at.slice(11, 23)} {l.message}
-              </div>
-            ))}
-          </pre>
-        </Card>
+                <Checklist state={state} checks={checks} setChecks={setChecks} />
+              </Card>
+            </div>
+
+            <Card title="Displays">
+              <DisplaysTable displays={state.displays} targetId={state.targetDisplayId} />
+            </Card>
+
+            <Card title="Log">
+              <pre className="max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed">
+                {logs.map((l) => (
+                  <div
+                    key={`${l.at}-${l.message}`}
+                    className={
+                      l.level === 'error'
+                        ? 'text-rose-300'
+                        : l.level === 'warn'
+                          ? 'text-amber-300'
+                          : 'text-slate-400'
+                    }
+                  >
+                    {l.at.slice(11, 23)} {l.message}
+                  </div>
+                ))}
+              </pre>
+            </Card>
+          </>
+        )}
       </main>
     </div>
   );

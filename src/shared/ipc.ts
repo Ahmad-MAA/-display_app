@@ -4,6 +4,7 @@
  */
 import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
 import type { DisplayInfo } from './displays';
+import type { SourceList } from './sources';
 
 /** Control Panel → main, request/response (ipcRenderer.invoke / ipcMain.handle). */
 export interface ControlInvokeMap {
@@ -15,12 +16,17 @@ export interface ControlInvokeMap {
   'displays:set-target': { args: [displayId: number | null]; result: void };
   /** Run `DisplaySwitch.exe /extend`, then re-scan. */
   'displays:extend': { args: []; result: ExtendResult };
+  /** Latest enumeration (enumerates first if none yet). */
+  'sources:get': { args: []; result: SourceList };
+  /** Enumerate now (manual Refresh). */
+  'sources:refresh': { args: []; result: SourceList };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
 export interface ControlEventMap {
   'state:changed': AppState;
   'log:entry': LogEntry;
+  'sources:changed': SourceList;
 }
 
 /** Info the Output window draws in its placement test pattern. */
@@ -50,9 +56,12 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'output:replace',
   'displays:set-target',
   'displays:extend',
+  'sources:get',
+  'sources:refresh',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [
   'state:changed',
   'log:entry',
+  'sources:changed',
 ];

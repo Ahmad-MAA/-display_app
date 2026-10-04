@@ -29,6 +29,30 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'sources-windows',
+    label:
+      'Step 3: Windows tab lists your open apps with live thumbnails, icons and process names; ProjectorDesk itself is not listed',
+    requires: () => null,
+  },
+  {
+    id: 'sources-minimized',
+    label:
+      'Step 3: minimize a window, come back — its card shows the “restore this window” hint; restore it and the thumbnail returns',
+    requires: () => null,
+  },
+  {
+    id: 'sources-screens',
+    label:
+      'Step 3: Screens tab shows both screens; the projector one is marked “Output is on this screen”',
+    requires: () => null,
+  },
+  {
+    id: 'sources-refresh',
+    label:
+      'Step 3: open a new app — it appears within ~2 s of returning to the panel; filter box narrows by title or app name',
+    requires: () => null,
+  },
+  {
     id: 'extend-button',
     label: 'Step 2: Win+P → Duplicate, then "Switch to Extend" brings the Output back',
     requires: (_l, s) =>

@@ -1,4 +1,5 @@
 import type { AppState, LogEntry, PlacementReport } from '@shared/diagnostics';
+import type { SourceList } from '@shared/sources';
 import { formatRect } from '@shared/displays';
 import { HARDWARE_CHECKS, type CheckId, type CheckResult } from './checklist';
 
@@ -20,6 +21,25 @@ export function placementSummary(state: AppState): string {
   return `${layout} | hotplug-recoveries ${state.hotplugRecoveries} | output ${formatRect(p.actual)} ${p.ok ? 'OK' : 'FAIL: ' + p.problems.join('; ')}${p.corrected ? ' (corrected)' : ''}`;
 }
 
+function sourcesBlock(list: SourceList | null): string {
+  if (!list) return '_Not loaded._';
+  if (list.error) return `❌ ${list.error}`;
+  const windows = list.sources.filter((s) => s.descriptor.kind === 'window');
+  const screens = list.sources.filter((s) => s.descriptor.kind === 'screen');
+  const named = windows.filter((s) => s.descriptor.processName !== null).length;
+  const rows = list.sources
+    .map(
+      (s) =>
+        `| ${s.descriptor.kind} | ${s.descriptor.title.replace(/\|/g, '/').slice(0, 60)} | ${s.descriptor.processName ?? s.displayLabel ?? '—'} | ${s.descriptor.hwnd ?? s.descriptor.displayId ?? '—'} | ${s.icon ? '✓' : '—'} | ${s.thumbnailBlank ? 'BLANK' : 'ok'}${s.isProjectorScreen ? ' · projector' : ''} |`,
+    )
+    .join('\n');
+  return `${windows.length} windows (${named} with process name, ${windows.filter((s) => s.thumbnailBlank).length} blank), ${screens.length} screens; listed at ${list.at}
+
+| kind | title | process / display | HWND / display id | icon | thumbnail |
+|---|---|---|---|---|---|
+${rows}`;
+}
+
 function placementBlock(p: PlacementReport | null): string {
   if (!p) return '_No placement yet (single display?)._';
   const v = p.viewport;
@@ -39,6 +59,7 @@ export function buildReport(
   state: AppState,
   checks: Record<CheckId, CheckRecord>,
   logs: LogEntry[],
+  sources: SourceList | null,
 ): string {
   const cp = state.contentProtection;
   const displays = state.displays
@@ -71,6 +92,9 @@ ${displays}
 
 ### Current Output placement
 ${placementBlock(state.placement)}
+
+### Sources
+${sourcesBlock(sources)}
 
 ### Hardware gate checklist
 ${checklist}

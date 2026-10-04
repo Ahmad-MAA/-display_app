@@ -6,10 +6,12 @@ import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
 import { OutputWindow } from './outputWindow';
+import { ownHwnds, SourceService } from './sources';
 import { lockDownNavigation, loadPage, preloadPath } from './windows';
 
 let control: BrowserWindow | null = null;
 let output: OutputWindow | null = null;
+let sources: SourceService | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
 let lostDisplayId: number | null = null;
@@ -91,6 +93,8 @@ async function placeOutput(reason: string): Promise<void> {
   }
   pushTestPattern(target);
   pushState();
+  // The "projector screen" flag on screen sources depends on the target.
+  if (control?.isFocused()) void sources?.refresh();
 }
 
 let lastPrimaryId: number | null = null;
@@ -186,6 +190,13 @@ function createControlWindow(): BrowserWindow {
   win.once('ready-to-show', () => {
     win.show();
   });
+  // Enumerate sources every 2 s only while the presenter is looking at the panel.
+  win.on('focus', () => {
+    sources?.startPolling();
+  });
+  win.on('blur', () => {
+    sources?.stopPolling();
+  });
   win.on('closed', () => {
     control = null;
     app.quit();
@@ -222,6 +233,14 @@ function registerIpc(): void {
     if (result.ok && output?.isVisible) extendSuccesses++;
     pushState();
     return result;
+  });
+  handle('sources:get', controlWc, async () => {
+    if (!sources) throw new Error('not ready');
+    return sources.latest.sources.length > 0 ? sources.latest : sources.refresh();
+  });
+  handle('sources:refresh', controlWc, async () => {
+    if (!sources) throw new Error('not ready');
+    return sources.refresh();
   });
   handle('output:replace', controlWc, async () => {
     await placeOutput('manual re-place');
@@ -260,6 +279,22 @@ if (!app.requestSingleInstanceLock()) {
       lastPlacement = report;
       pushState();
     });
+    sources = new SourceService(
+      {
+        ownHwnds: () =>
+          ownHwnds(
+            [control, output?.win].filter(
+              (w): w is BrowserWindow => w !== null && w !== undefined && !w.isDestroyed(),
+            ),
+          ),
+        projectorDisplayId: () => (output?.isVisible ? targetDisplayId : null),
+        displayLabel: (id) => listDisplays().find((d) => String(d.id) === id)?.label ?? null,
+      },
+      (list) => {
+        sendToControl(controlWc(), 'sources:changed', list);
+      },
+    );
+    if (control.isFocused()) sources.startPolling();
     watchDisplays();
     void placeOutput('startup');
   });
@@ -269,6 +304,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', () => {
+    sources?.dispose();
     output?.destroy();
   });
 }

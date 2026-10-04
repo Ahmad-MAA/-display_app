@@ -32,6 +32,24 @@ the second display.
 
 Display events (`display-added`, `display-removed`, `display-metrics-changed`) are coalesced over 300 ms, and placements are serialized. If the target display is removed, the Output window hides immediately.
 
+## Source enumeration
+
+`src/main/sources.ts` calls `desktopCapturer.getSources({ types: ['window','screen'],
+thumbnailSize: 320×180, fetchWindowIcons: true })`. It polls every 2 s only while the Control Panel
+is focused (focus/blur on the window), also refreshes on demand, and coalesces overlapping
+calls. Thumbnails are sent as JPEG data URLs; icons as PNG.
+
+- **Own windows excluded** by HWND, from `BrowserWindow.getMediaSourceId()` of the Control Panel
+  and Output windows.
+- **Blank thumbnails** (`isEmpty()` or a sampled all-black bitmap, `isBlankBitmap`) mark minimized
+  or protected windows; the card tells the user to restore the window.
+- **Process names**: Electron doesn't expose them, but `SourceDescriptor.processName` needs them
+  for favourites and for a native engine. `src/main/processNames.ts` keeps one hidden PowerShell
+  process that P/Invokes `GetWindowThreadProcessId` and answers HWND batches as JSON lines;
+  results are cached per HWND. If PowerShell is unavailable the helper disables itself, logs
+  once, and names fall back to null. No native Node module is involved.
+- Screen sources map `display_id` to our display list for labels and to flag the projector screen.
+
 ## Recursive-mirror prevention
 
 `setContentProtection(true)` is called on the Output window right after construction, before it is ever shown (`src/main/contentProtection.ts`). Startup verifies both `isContentProtected()` and that the OS build is 19041 or newer, since only `WDA_EXCLUDEFROMCAPTURE` removes the window from capture. Otherwise the Control Panel shows a persistent warning. Later steps disable "Entire Screen" for the projector display in that case.
