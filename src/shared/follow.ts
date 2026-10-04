@@ -37,12 +37,6 @@ export interface WinInfo {
   monitor: Rect | null;
 }
 
-/**
- * Short-lived windows apps show while switching to full screen. Following one gives a
- * black gap when it closes (seen on hardware: WMP's "WMPTransition").
- */
-const TRANSIENT_TITLES = new Set(['WMPTransition']);
-
 /** Full-screen windows that must never be followed. */
 const IGNORED_CLASSES = new Set([
   'PodiumParent', // PowerPoint Presenter View (notes screen); follow the slide show instead
@@ -72,8 +66,7 @@ export function chooseFollow(
       w.fullscreen &&
       w.hwnd !== target.hwnd &&
       w.pid === target.pid &&
-      !IGNORED_CLASSES.has(w.className) &&
-      !TRANSIENT_TITLES.has(w.title),
+      !IGNORED_CLASSES.has(w.className),
   );
   if (candidates.length === 0) return { kind: 'primary' };
   const current = candidates.find((w) => w.hwnd === currentHwnd);

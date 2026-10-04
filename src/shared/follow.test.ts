@@ -58,11 +58,9 @@ describe('chooseFollow', () => {
     expect(chooseFollow(ppt, [presenter], null)).toEqual({ kind: 'primary' });
   });
 
-  it('skips WMP’s short-lived transition window (avoids a black gap)', () => {
-    const transition = win({ hwnd: '2', title: 'WMPTransition', fullscreen: true });
-    const real = win({ hwnd: '3', title: 'Windows Media Player', fullscreen: true });
-    expect(chooseFollow(main, [transition, real], null)).toEqual({ kind: 'window', win: real });
-    expect(chooseFollow(main, [transition], null)).toEqual({ kind: 'primary' });
+  it('follows WMP’s full-screen window, which is titled "WMPTransition" (hardware finding)', () => {
+    const fsWin = win({ hwnd: '2', title: 'WMPTransition', fullscreen: true });
+    expect(chooseFollow(main, [fsWin], null)).toEqual({ kind: 'window', win: fsWin });
   });
 
   it('prefers the real video window over a transparent full-screen controls overlay above it', () => {

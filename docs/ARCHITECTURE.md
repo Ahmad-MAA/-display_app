@@ -153,7 +153,7 @@ ones) therefore lose the content. `FullscreenFollower` (`src/main/fullscreenFoll
   aware.
 - `chooseFollow()` (pure, unit-tested): picked window itself full screen → keep it (Chrome/Edge);
   another full-screen window of the same process → follow it (PowerPoint `PodiumParent` / Presenter
-  View excluded; WMP's transient `WMPTransition` window skipped); else the picked window. Among
+  View excluded; note WMP's full-screen window is titled `WMPTransition`); else the picked window. Among
   several candidates, real content windows beat overlays (`overlayScore`: transparent > layered >
   tool window > no-activate rank last), so a player's click-through full-screen controls bar isn't
   captured instead of the video. `Stabilizer` needs the same decision twice (~600 ms) so

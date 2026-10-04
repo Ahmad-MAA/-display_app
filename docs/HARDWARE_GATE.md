@@ -125,3 +125,15 @@ full screen).
   in-flight placement and keeps the Output hidden.
 - Stats were bogus while the Output was hidden (no compositing → huge "drops"); now discarded,
   and counters restart when it's visible again.
+
+# Step 6 re-test
+
+- Cursor: PASS (button reports "can't hide (Phase 1)").
+- **Follow full screen with WMP: FAIL, root cause found.** The report's "Follow full screen trace"
+  was empty: the follower never committed a decision, i.e. it saw no full-screen window it was
+  willing to follow. Cause: an earlier change skipped windows titled `WMPTransition`, assuming a
+  transient animation window. That was a misreading of the earlier log: `WMPTransition` **is**
+  WMP's full-screen video window (its "capture ended" lines were the exits from full screen).
+  The skip is removed; the follower now logs every change in what it sees (followed or not), so
+  an empty trace can't hide a rejected candidate again. Re-test needed.
+- Caret focus check: untested.

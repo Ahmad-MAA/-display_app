@@ -36,6 +36,8 @@ export class FullscreenFollower {
   private fellBackFor: string | null = null;
   /** Consecutive black-frame reports from the followed window. */
   private blankCount = 0;
+  /** Last logged set of full-screen windows seen (log on change only). */
+  private seenKey = '';
 
   constructor(
     private readonly helper: WindowHelper,
@@ -76,6 +78,7 @@ export class FullscreenFollower {
     this.followed = null;
     this.fellBackFor = null;
     this.blankCount = 0;
+    this.seenKey = '';
     if (!this.on || !this.picked || !this.helper.available) return;
     this.timer = setInterval(() => void this.tick(), POLL_MS);
     void this.tick();
@@ -94,6 +97,16 @@ export class FullscreenFollower {
       const res = await this.helper.follow(picked.hwnd);
       if (!res || picked !== this.picked || !this.timer) return;
       const decision = chooseFollow(res.target, res.fullscreen, this.followed?.hwnd ?? null);
+      // Log what was seen whenever it changes, even if nothing is followed, so an empty
+      // trace can never hide why (a filtered-out candidate was exactly that bug).
+      const seenKey = `${res.target.fullscreen ? 'self' : ''}|${res.fullscreen.map((w) => w.hwnd).join(',')}`;
+      if (seenKey !== this.seenKey) {
+        this.seenKey = seenKey;
+        log(
+          'info',
+          `Follow: seen picked window ${describeWindows([res.target])}; same-process full-screen windows: ${res.fullscreen.length ? describeWindows(res.fullscreen) : 'none'} → ${decisionKey(decision)}`,
+        );
+      }
       if (!this.stable.push(decisionKey(decision))) return;
       log(
         'info',
