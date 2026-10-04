@@ -31,7 +31,7 @@ them:
 - **SmartScreen** says "Windows protected your PC": click **More info → Run anyway**.
 - **Smart App Control** (Windows 11) and some **OEM or antivirus security** tools can block an
   unsigned app **outright**, with no "Run anyway" option ("publisher couldn't be verified"). Seen
-  in testing: the installer ran, the portable exe was blocked. Don't turn Smart App Control off
+  in testing: Smart App Control blocked both the portable exe and the installed app. Don't turn Smart App Control off
   to get around it (on many Windows versions it can't be turned back on without reinstalling
   Windows); sign the builds instead.
 
@@ -189,6 +189,10 @@ Phase 1 limits; the native engine (Phase 2) removes the first three.
   immediately.
 - DRM-protected video captures as black.
 - Projecting the projector's own screen needs Windows 10 2004+ (capture exclusion).
+- **Unsigned builds are blocked by Smart App Control.** On a Windows 11 PC with Smart App
+  Control on, the installed app and the portable exe are blocked outright ("publisher couldn't
+  be verified", no "Run anyway"). Until the builds are [code-signed](#code-signing), run from
+  source with `npm run dev` on such PCs (see [Development](#development)).
 
 ## Development
 
