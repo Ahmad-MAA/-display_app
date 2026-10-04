@@ -7,13 +7,13 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 2 (display detection & hot-plug) — awaiting hardware check.** Step 1
-> passed its hardware gate ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)). Source
-> selection and capture come in later steps.
+> **Status: step 2 complete — display detection, Extend button and hot-plug verified on
+> hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).** Source selection and capture
+> come in later steps.
 
 ## Setup
 
-Requirements: Windows 10 2004 (build 19041) or newer, Node.js 22+.
+Requirements: Windows 10 2004 (build 19041) or newer, Node.js 22.12+ (npm 12 needs Node 22.22.2+).
 
 ```powershell
 npm install
@@ -21,6 +21,20 @@ npm run dev        # run with hot reload
 npm run check      # typecheck + ESLint + Prettier
 npm run dist:win   # NSIS installer + portable exe in dist/
 ```
+
+### Install scripts (npm 12+)
+
+npm 12 blocks dependency install scripts unless `package.json` → `allowScripts` lists them:
+
+| Package                     | Decision | Why                                                                                                                                                                        |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `esbuild` (pinned versions) | allowed  | Vite/electron-vite build tool; postinstall verifies its native binary                                                                                                      |
+| `electron-winstaller`       | denied   | Only used by electron-builder's Squirrel.Windows target; we build NSIS + portable                                                                                          |
+| `electron`                  | —        | Electron 44 has no install script. The project's own `postinstall` runs `install-electron` (checksum-verified download) so the binary is present right after `npm install` |
+
+Entries are pinned to exact versions. After upgrading a dependency, npm lists any new
+unreviewed scripts at the end of the install; review them with `npm install-scripts ls` and
+approve with `npm install-scripts approve <pkg>`.
 
 ## Set Windows to Extend
 

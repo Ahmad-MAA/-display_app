@@ -30,3 +30,17 @@ handling) re-tests it.
 - Test pattern false MISMATCH at 150 % → rounding tolerance.
 - Checklist accepted Pass without matching layout → Pass gated on live layout.
 - Re-clicking Pass overwrote evidence → no-op.
+
+# Step 2 hardware check — results
+
+Same hardware, 2026-10-04. Primary at 125 %, ASUS at 100 %. Log shows no placement
+warnings at all after the step-1 rounding fixes.
+
+| Check                                                          | Result | Evidence                                                    |
+| -------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| Duplicate → "Switch to Extend" → Output returns                | PASS   | `extendSuccesses > 0`; Output exact @ (98, −1080)           |
+| Projector made main display → Control Panel / Output swap      | PASS   | `primarySwaps > 0`; swapped back, Output exact @ (1536, 97) |
+| Unplug / replug (re-test with step-2 code)                     | PASS   | 4 unplug → replug cycles, each hidden then restored exactly |
+| Step-1 regressions (primary 150 %, right, non-native 1280×800) | PASS   | Output exact in each                                        |
+
+Not testable with two displays: choosing between several projectors in the dropdown.
