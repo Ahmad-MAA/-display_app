@@ -60,6 +60,10 @@ export class SettingsStore {
     }, SAVE_DELAY_MS);
   }
 
+  /** Told once when saving starts failing (e.g. disk full, folder not writable). */
+  onSaveError: ((message: string) => void) | null = null;
+  private saveFailing = false;
+
   /** Write now (also called on quit). */
   flush(): void {
     if (this.timer) clearTimeout(this.timer);
@@ -68,8 +72,11 @@ export class SettingsStore {
     try {
       writeFileSync(tmp, JSON.stringify(this.value, null, 2), 'utf8');
       renameSync(tmp, this.file);
+      this.saveFailing = false;
     } catch (err) {
       log('warn', `Could not save settings: ${String(err)}`);
+      if (!this.saveFailing) this.onSaveError?.(`Settings could not be saved (${String(err)}).`);
+      this.saveFailing = true;
     }
   }
 }

@@ -36,6 +36,9 @@ const api: OutputApi = {
   reportSourceStatus: (status) => {
     send('output:source-status', status);
   },
+  reportError: (message) => {
+    send('output:error', message);
+  },
 };
 
 contextBridge.exposeInMainWorld('projectorOutput', api);

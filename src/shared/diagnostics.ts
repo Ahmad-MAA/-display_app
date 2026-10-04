@@ -123,4 +123,6 @@ export interface AppState {
   settings: Settings;
   /** "Resume last projection?": the saved source is open again (sourceId to project). */
   resumeOffer: { ref: SourceRef; sourceId: string } | null;
+  /** Unexpected failure the presenter should know about (details in the log); null = none. */
+  appError: string | null;
 }

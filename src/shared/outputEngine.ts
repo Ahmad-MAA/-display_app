@@ -8,9 +8,8 @@
  *
  * Keep everything here serializable: the message types below are the wire format.
  *
- * Implemented so far by ElectronOutputEngine: setSource, setFillMode, setCrop, source
- * ended / errors. blank, freeze, cursor and stats arrive in step 6; the formal
- * `implements OutputEngine` + named-pipe transport in step 7.
+ * ElectronOutputEngine implements all of it; engineProtocol.ts holds the wire codec. The
+ * Phase 2 plan is in docs/ARCHITECTURE.md.
  */
 import type { CropRect } from './geometry';
 

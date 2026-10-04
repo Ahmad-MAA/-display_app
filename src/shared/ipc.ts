@@ -48,6 +48,10 @@ export interface ControlInvokeMap {
   };
   /** Accept (true) or dismiss (false) the "Resume last projection" offer. */
   'settings:resume': { args: [accept: boolean]; result: ProjectResult };
+  /** An uncaught error in the Control Panel page, for the log. */
+  'app:report-error': { args: [message: string]; result: void };
+  /** Close the "Something went wrong" banner. */
+  'app:dismiss-error': { args: []; result: void };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -89,6 +93,8 @@ export interface OutputSendMap {
   'output:source-status': SourceStatus;
   /** Once per second while live. */
   'output:stats': OutputStatsReport;
+  /** An uncaught error in the Output page, for the log. */
+  'output:error': string;
 }
 
 export type ControlInvokeChannel = keyof ControlInvokeMap;
@@ -116,6 +122,8 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'favorites:project',
   'settings:set-hotkeys',
   'settings:resume',
+  'app:report-error',
+  'app:dismiss-error',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

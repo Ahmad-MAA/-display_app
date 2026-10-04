@@ -1,24 +1,198 @@
 # ProjectorDesk
 
-A Windows presenter tool with two windows:
+A Windows presenter tool: put exactly one window (or screen) on the projector, and nothing else.
 
-- **Control Panel** on the primary monitor: choose what goes on the projector.
-- **Output window**: borderless, full-screen and black, on the projector display (extended mode). It shows only the selected window, letterboxed.
+- **Control Panel** on your laptop screen: pick what the audience sees, blank or freeze it, switch
+  sources.
+- **Output** on the projector: borderless, full screen, black. It shows only the selected window,
+  scaled to fit. Notifications, other apps and the Control Panel never appear on it.
 
-Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Phase 1 (this repository) is Electron + TypeScript + React/Tailwind. Phase 2, a native
+Windows.Graphics.Capture engine for sub-frame latency, HDR and cursor hiding, is planned in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#phase-2-native-output-engine).
 
-> **Status: step 6 (presenter controls, hotkeys, stats) — awaiting hardware check.** Steps 1–5
-> passed on hardware except the covering warning, which failed because the window helper didn't
-> start (fixed; re-test) ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
+> **Status: Phase 1, build step 8 (packaging, error handling) awaiting its hardware check.**
+> Steps 1–7 passed on hardware (Windows 11, 125 % laptop panel + 1080p monitor) except two
+> items not yet run: the crop editor and VLC full screen. Results:
+> [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md).
 
-## Setup
+## Install
 
-Requirements: Windows 10 2004 (build 19041) or newer, Node.js 22.12+ (npm 12 needs Node 22.22.2+).
+Requirements: Windows 10 version 2004 (build 19041) or newer, 64-bit.
+
+Two builds (see [Building the installer](#building-the-installer)):
+
+- **`ProjectorDesk-Setup-<version>.exe`**: installs for the current user (no admin needed), adds
+  Start menu and desktop shortcuts, uninstalls from Settings → Apps.
+- **`ProjectorDesk-<version>-portable.exe`**: runs without installing, e.g. from a USB stick.
+
+The builds are not code-signed, so Windows SmartScreen says "Windows protected your PC" on first
+run: click **More info → Run anyway**.
+
+Settings, favorites and logs live in `%APPDATA%\ProjectorDesk` and survive upgrades and
+uninstalling.
+
+## Quick start
+
+1. Connect the projector and press **Win+P → Extend**. (Duplicate mirrors your whole screen,
+   which is what ProjectorDesk avoids. If only one display is active, the Control Panel offers
+   **Switch to Extend**.)
+2. Start ProjectorDesk. The projector goes black: that's the Output, waiting.
+3. In **Sources**, click a window. It appears on the projector; **Now projecting** shows a live
+   preview of exactly what the audience sees.
+4. Click another card to switch (a short fade through black), or **Stop** to go black.
+
+## Using ProjectorDesk
+
+### Sources
+
+- **Windows** lists every app window with a live thumbnail, icon and app name; **Screens** lists
+  whole displays. The list refreshes every 2 s while the Control Panel is in front. Type in the
+  filter box to narrow by title or app.
+- **Minimized windows** stay in the list, greyed out. Picking one restores it without taking
+  focus from the Control Panel, then projects it.
+- **Closing the projected window** turns the projector black and the panel says "Source closed".
+- **Projecting the projector's own screen** is safe: the Output is excluded from capture, so there
+  is no endless mirror.
+
+### Fill modes and crop
+
+In _Now projecting_:
+
+- **Fit** (default): the whole picture, black bars where its shape differs from the projector.
+- **Fill**: fills the projector, trimming the edges that don't fit.
+- **Stretch**: fills the projector, distorting the shape.
+- **Crop…**: drag over a larger live view of the source to pick the region the audience sees, then
+  **Apply crop**. The region keeps its shape and is placed by the fill mode. **Clear crop** shows
+  the whole picture again. A crop belongs to one source; picking another clears it.
+
+### Presenter controls and hotkeys
+
+| Action                                        | In the Control Panel | From any app (global)    |
+| --------------------------------------------- | -------------------- | ------------------------ |
+| Blank: projector black, capture keeps running | **B**                | **Ctrl+Alt+B**           |
+| Freeze the current frame                      | **F**                | **Ctrl+Alt+F**           |
+| Fill mode Fit → Fill → Stretch                | **M**                | **Ctrl+Alt+M**           |
+| Stats overlay on the projector                | **S**                | **Ctrl+Alt+S**           |
+| Show / hide the mouse cursor¹                 | **C**                | **Ctrl+Alt+C**           |
+| Next / previous source                        | **Ctrl+→ / Ctrl+←**  | **Ctrl+Alt+PgDn / PgUp** |
+| Emergency hide / show the Output              | **Esc**              | **Ctrl+Alt+H**           |
+
+¹ Not possible in Phase 1; see [Known limits](#known-limits).
+
+- The same toggles are buttons in _Now projecting_.
+- **Global hotkeys don't take focus**, so a video player stays in its own full screen while you
+  switch sources. (Windows Media Player leaves full screen when you click the Control Panel.)
+- Change them under **Settings → Global hotkeys**. Each needs Ctrl, Alt or Win, so it can't
+  steal a letter from the app you're typing in. Avoid Ctrl+Alt+arrows: many Intel graphics
+  drivers rotate the screen on them. If another app already owns a combination, Settings says so
+  and the panel key / button still works.
+- **Stats** shows delivered fps, dropped frames and capture-to-display latency, measured on the
+  Output.
+
+### Follow full screen (video players, slide shows)
+
+Windows Media Player, VLC and PowerPoint's slide show go full screen in a **separate** window. With
+**Follow full screen** on (the default), ProjectorDesk switches to that window and back when you
+exit; the panel says "Following full screen".
+
+| App                                                | What happens when you go full screen                     |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| Windows Media Player, VLC, PowerPoint slide show   | capture follows the full-screen window, then comes back  |
+| Chrome / Edge (YouTube etc.)                       | the same window goes full screen; capture just continues |
+| A full-screen window that can't be window-captured | falls back to capturing the whole screen it's on         |
+
+PowerPoint's Presenter View is never followed, only the slide show.
+
+### Slide shows (WPS Office, PowerPoint): play them on Monitor 1
+
+With **Presenter View** on, WPS and PowerPoint put the slide show **always-on-top on the second
+monitor**, which is the projector. It covers ProjectorDesk's Output, and picking another source
+seems to do nothing until the slide show ends. ProjectorDesk shows a red **"Another window is
+covering the projector"** warning when this happens.
+
+Let ProjectorDesk put the slides on the projector instead:
+
+- **WPS Office**: Slide Show → Set Up Show → _Show on_: **Monitor 1** (your laptop screen), and
+  turn **Presenter View off**.
+- **PowerPoint**: Slide Show tab → _Monitor_: **Primary Monitor**, and untick **Use Presenter
+  View**.
+- Start the slide show, then pick the presentation window in ProjectorDesk. Follow full screen
+  switches to the slide-show window automatically.
+
+### Settings, favorites and resume
+
+Everything is saved automatically to `%APPDATA%\ProjectorDesk\settings.json`:
+
+- the projector you picked in the **Projector** dropdown, the fill mode, Follow full screen and
+  the global hotkeys;
+- **Favorites**: ☆ on any card pins it to the Favorites bar. Window ids change every time an app
+  restarts, so favorites are matched by app and title (a title that contains the saved one, or the
+  only window of that app, also matches). A favorite whose app isn't open is greyed out.
+- **Resume last projection**: on the next start, if what was on the projector is open again, a
+  banner offers to project it. Nothing is projected until you click **Resume**.
+
+A damaged settings file is set aside as `settings.corrupt-<time>.json` and defaults are used.
+
+### Displays
+
+- **Projector dropdown**: "Automatic" uses the first display that isn't your main one. The Output
+  follows display changes: unplugging the projector hides it, plugging it back in restores it,
+  and making another display the main one swaps the windows.
+- Mixed scaling (e.g. laptop at 125 %, projector at 100 %) is handled: the Output covers the
+  projector exactly. **Test pattern** draws a border, corner marks and a circle on the projector
+  to check this.
+
+## Troubleshooting
+
+| You see                                      | Meaning / what to do                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Projector not detected or set to Duplicate" | Only one display is active. Win+P → Extend, or click **Switch to Extend**.                                                                        |
+| "Projector disconnected"                     | The Output is hidden and comes back when the display returns. **Use another display** picks a different one.                                      |
+| "Another window is covering the projector"   | An always-on-top window (usually a slide show) is on the projector. See [Slide shows](#slide-shows-wps-office-powerpoint-play-them-on-monitor-1). |
+| "Output hidden"                              | Emergency hide is on (Esc / Ctrl+Alt+H). **Show Output** brings it back.                                                                          |
+| "Recursive-mirror protection unavailable"    | Windows older than 10 2004: projecting the projector's own screen would mirror endlessly, so that screen is disabled.                             |
+| "Window helper unavailable"                  | PowerShell couldn't start (e.g. blocked by policy). Projection works; app names, minimized windows and follow are missing.                        |
+| "Something went wrong"                       | An unexpected error, or a crashed page that was reloaded automatically. Details are in the log; **Dismiss** closes it.                            |
+| The projector shows black for a video        | DRM-protected content (Netflix, some players) captures as black. Nothing to fix on our side.                                                      |
+
+- **Log**: Diagnostics → Log, or `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+- **Copy report** (top right) copies a Markdown report with displays, placement, sources, the
+  follow trace and recent warnings. Paste it into a bug report.
+- **Crashes**: if the Output's page crashes it is reloaded and the projection restarts by itself;
+  if the Control Panel's page crashes it is reloaded and the projector is unaffected. After three
+  crashes in a minute ProjectorDesk stops retrying and asks you to restart it.
+
+## Known limits
+
+Phase 1 limits; the native engine (Phase 2) removes the first three.
+
+- **The mouse cursor is always captured.** Chromium ignores "hide cursor", so the C toggle
+  reports "can't hide (Phase 1)". A side effect: when the pointer rests over a text box it
+  becomes an I-beam, and Windows hides and shows it while you type, so on the projector it
+  looks like a **blinking text caret** in the projected app. It is the pointer, not keyboard
+  focus. Move the pointer off the projected window's text areas (or over the Control Panel).
+- **Latency**: capture-to-display measured on hardware is ~25 ms median (≈1.5 frames at 60 Hz),
+  above the one-frame target. Every projection session is recorded in
+  `%APPDATA%\ProjectorDesk\logs\sessions.jsonl` as evidence for the native engine.
+- **SDR only**: HDR sources are tone-mapped; a banner says so when an HDR display is present.
+- A window that is always-on-top on the projector (a slide show with Presenter View) covers the
+  Output. ProjectorDesk warns but can't push it away.
+- Restoring a minimized window that was maximized brings it to the front on your laptop screen
+  (Windows can only re-maximize by activating it); the Control Panel takes focus back
+  immediately.
+- DRM-protected video captures as black.
+- Projecting the projector's own screen needs Windows 10 2004+ (capture exclusion).
+
+## Development
+
+Requirements: Node.js 22.12+ (npm 12 needs Node 22.22.2+). Builds run on Windows; the app only
+works on Windows.
 
 ```powershell
 npm install
 npm run dev        # run with hot reload
-npm run check      # typecheck + ESLint + Prettier
+npm run check      # typecheck (strict) + ESLint + Prettier + unit tests
 npm run dist:win   # NSIS installer + portable exe in dist/
 ```
 
@@ -32,207 +206,37 @@ npm 12 blocks dependency install scripts unless `package.json` → `allowScripts
 | `electron-winstaller`       | denied   | Only used by electron-builder's Squirrel.Windows target; we build NSIS + portable                                                                                          |
 | `electron`                  | —        | Electron 44 has no install script. The project's own `postinstall` runs `install-electron` (checksum-verified download) so the binary is present right after `npm install` |
 
-Entries are pinned to exact versions. After upgrading a dependency, npm lists any new
-unreviewed scripts at the end of the install; review them with `npm install-scripts ls` and
-approve with `npm install-scripts approve <pkg>`.
+Entries are pinned to exact versions. After upgrading a dependency, npm lists any new unreviewed
+scripts at the end of the install; review them with `npm install-scripts ls` and approve with
+`npm install-scripts approve <pkg>`.
 
-## Set Windows to Extend
+### Building the installer
 
-The projector must be an **extended** display, not a duplicate:
+`npm run dist:win` on Windows produces in `dist/`:
 
-1. Press **Win+P**.
-2. Choose **Extend**.
+- `ProjectorDesk-Setup-<version>.exe` (NSIS, per-user, choose folder, shortcuts);
+- `ProjectorDesk-<version>-portable.exe`;
+- `win-unpacked/` (the app folder, for quick testing).
 
-If ProjectorDesk sees only one display, it shows "Projector not detected or set to Duplicate."
+Configuration is in `electron-builder.yml`; the icon is `resources/icon.ico`. There are no native
+modules and no runtime npm dependencies: the package contains only the compiled `out/` folder.
+To sign, set electron-builder's `CSC_LINK` / `CSC_KEY_PASSWORD` environment variables. Building
+the NSIS installer on Linux/macOS needs Wine (including 32-bit Wine on Linux).
 
-## Step 1 hardware gate
+### Project layout
 
-Run this with a real projector or second monitor. Display-bounds bugs only show up on real hardware with mixed DPI scaling.
+| Path                   | What                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `src/main/`            | Electron main process: windows, placement, capture routing, window helper, settings |
+| `src/preload/`         | Sandboxed preloads exposing the typed APIs                                          |
+| `src/renderer/control` | Control Panel (React)                                                               |
+| `src/renderer/output`  | Output page (plain TS: video, crop canvas, blank/freeze, stats)                     |
+| `src/shared/`          | Pure, unit-tested logic and the IPC / OutputEngine contracts                        |
+| `docs/`                | Architecture, Phase 2 plan, hardware verification results                           |
 
-1. `npm run dev`. The Output window should go black, full screen, on the secondary display.
-2. In the Control Panel, turn on **Test pattern**. On the projector, check that:
-   - the red border and all four yellow corners are visible;
-   - the circle is round;
-   - the "Rendering" line is green: `DIP × DPR` equals the display's native pixel size (within 1–2 px rounding at 125%/150%).
-3. The **Output placement** card should say "Covers display exactly". Every mismatch, and every correction the app made, is logged.
-4. Repeat for each item in the **Step 1 hardware gate** card and mark Pass/Fail. **Pass only becomes clickable while the current layout actually demonstrates that item** (e.g. the secondary really is left of the primary, and placement is OK). The amber hint under each item says what to change. Marking records a snapshot of the layout as evidence. The unplug/replug item unlocks once the app has seen the projector removed and the Output restored.
-   - Primary at 125% or 150%, secondary at 100%, and the reverse.
-   - Secondary left of, right of, and above the primary (Settings → System → Display, drag the monitors).
-   - Projector at a non-native resolution (e.g. 1024×768 or 1280×800).
-   - Unplug and replug the projector while the app runs. Output must hide on unplug and return on replug.
-5. Click **Copy report** and paste the Markdown report back into the task.
+### Hardware verification
 
-The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
-
-## Presenter controls and hotkeys
-
-| Action                                        | In the Control Panel | From any app (global)    |
-| --------------------------------------------- | -------------------- | ------------------------ |
-| Blank: projector black, capture keeps running | **B**                | **Ctrl+Alt+B**           |
-| Freeze the current frame                      | **F**                | **Ctrl+Alt+F**           |
-| Fill mode Fit → Fill → Stretch                | **M**                | **Ctrl+Alt+M**           |
-| Stats overlay on the projector                | **S**                | **Ctrl+Alt+S**           |
-| Show / hide the mouse cursor                  | **C**                | **Ctrl+Alt+C**           |
-| Next / previous source                        | **Ctrl+→ / Ctrl+←**  | **Ctrl+Alt+PgDn / PgUp** |
-| Emergency hide / show the Output              | **Esc**              | **Ctrl+Alt+H**           |
-
-The same toggles are buttons in _Now projecting_.
-
-- **Global hotkeys don't take focus.** A video player stays in its own full screen while you
-  switch sources (Windows Media Player leaves full screen when you click the Control Panel).
-- **Why Ctrl+Alt:** a global plain "B" would steal that letter from every app you type in.
-  **Why PgUp/PgDn:** many Intel graphics drivers rotate the screen on Ctrl+Alt+Arrow. Change
-  them under **Settings → Global hotkeys** (each must include Ctrl, Alt or Win). If another app
-  already owns a combination, Settings and Diagnostics say so and the button / panel key still
-  works.
-- **Hide cursor**: not possible in Phase 1. Chromium accepts the request but always draws the
-  cursor (seen on hardware: `cursor: always`); after the first attempt the button says so. The
-  native engine (`IsCursorCaptureEnabled = false`) fixes this.
-- **Stats**: delivered fps, dropped frames, capture-to-display latency and processing time,
-  measured on the Output. Every projection is summarized in `logs/sessions.jsonl`; sessions with
-  median latency above one frame or more than 2% dropped frames are flagged as evidence for the
-  native engine (Diagnostics → Recent sessions).
-- **HDR**: if any display reports HDR, a banner explains that Phase 1 output is SDR.
-
-## Settings, favorites and resume
-
-Everything is saved automatically to `%APPDATA%\ProjectorDesk\settings.json`:
-
-- the projector you picked in the dropdown, the fill mode, Follow full screen, the global hotkeys;
-- **Favorites**: ☆ on any card pins it to the Favorites bar above the grid. Window ids change
-  every time an app restarts, so favorites are matched by app (process) and title; a title that
-  merely contains the saved one (e.g. `Deck.pptx - PowerPoint [Read-Only]`) or the only window of
-  that app also matches. A favorite whose app isn't open is greyed out.
-- **Resume last projection**: on the next start, if what was on the projector is open again, a
-  banner offers to project it. Nothing is projected without your click.
-
-A damaged settings file is set aside as `settings.corrupt-<time>.json` and defaults are used. The
-_Output engine_ choice shows the Phase 2 native engine as not available yet.
-
-Step 7 hardware check: the "Step 7" items in **Diagnostics → Hardware checks**.
-
-## Fill modes and crop
-
-In **Now projecting**:
-
-- **Fit** (default): the whole picture, black bars where its shape differs from the projector.
-- **Fill**: fills the projector, trimming the edges that don't fit.
-- **Stretch**: fills the projector, distorting the shape.
-- **Crop…**: drag over a larger live view of the source to pick the region the audience sees, then
-  **Apply crop**. The region keeps its shape and is placed by the fill mode (Fit = bars). The small
-  preview outlines the crop; **Clear crop** shows the whole picture again. A crop belongs to one
-  source and is cleared when you pick another; the fill mode carries over.
-
-Step 5 hardware check: the "Step 5" items (plus the covering-warning item) in **Diagnostics →
-Hardware checks**.
-
-## Follow full screen (video players, slide shows)
-
-Some apps don't go full screen in the window you projected. Windows Media Player, VLC and
-PowerPoint's slide show open a **separate** full-screen window (WMP also hides its main window), so
-a plain window capture would show only the old frame, or fail. With **Follow full screen** on (the
-default, in _Now projecting_), ProjectorDesk watches the projected app and:
-
-| App                                                | What happens when you go full screen                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------------- |
-| Windows Media Player, VLC, PowerPoint slide show   | capture switches to the app's full-screen window, then back when you exit |
-| Chrome / Edge (YouTube etc.)                       | nothing to do: the same window goes full screen, capture just continues   |
-| A full-screen window that can't be window-captured | falls back to capturing the whole screen it's on                          |
-
-PowerPoint's Presenter View is never followed, only the slide show. While following, the panel shows
-"Following full screen". Each switch logs every top-level window of the app (Diagnostics → Log /
-Copy report) so other players can be diagnosed.
-
-Hardware check: the four "Follow full screen" items in **Diagnostics → Hardware checks**.
-
-## Slide shows (WPS Office, PowerPoint): play them on Monitor 1
-
-With **Presenter View** on, WPS and PowerPoint put the slide show **always-on-top on the second
-monitor**, which is the projector. It then covers ProjectorDesk's Output window: the audience
-sees the slide show, and picking another source in ProjectorDesk seems to do nothing until the
-slide show ends. ProjectorDesk shows a red **"Another window is covering the projector"** warning
-when this happens.
-
-Workaround: let ProjectorDesk put the slides on the projector.
-
-- **WPS Office**: Slide Show → Set Up Show → _Show on_: **Monitor 1** (your laptop screen), and turn
-  **Presenter View off**.
-- **PowerPoint**: Slide Show tab → _Monitor_: **Primary Monitor**, and untick **Use Presenter View**.
-- Start the slide show, then pick the presentation window in ProjectorDesk. **Follow full screen**
-  switches to the slide-show window automatically.
-
-Players that leave full screen when they lose focus (Windows Media Player does when you click the
-Control Panel) can stay full screen if you switch sources with ProjectorDesk's global hotkeys
-(step 6), which don't take focus.
-
-## Step 4 hardware check
-
-Click any card in **Sources** to put it on the projector. **Now projecting** (right column) shows
-a live 10 fps preview, the capture size, and a **Stop** button. Run the five "Step 4" items in
-**Diagnostics → Hardware checks**:
-
-1. **Project a window**: it fills the projector without distortion (black bars when the
-   shape differs: letterbox/pillarbox), and the preview is live.
-2. **Switch**: pick another source: a 150 ms fade through black, no flash of the old one.
-3. **Minimized card**: picking it restores the window _without activating it_
-   (`SW_SHOWNOACTIVATE`) and projects it; the Control Panel keeps focus. A window that was
-   maximized before minimizing can only be restored maximized by activating it, so focus is
-   handed straight back to the Control Panel. Try both kinds.
-4. **Close the projected window**: the projector goes black and the panel says "Source closed".
-5. **Recursive-mirror test**: Screens → pick the ASUS (projector) screen. There must be no
-   infinite mirror: the Output window is excluded from capture, so the projector shows that
-   screen as if the Output weren't there (usually the wallpaper). The panel shows a notice
-   explaining this.
-
-## Step 3 hardware check
-
-The **Sources** tab lists every capturable window and screen. It auto-refreshes every 2 s while
-the Control Panel is focused, and on **Refresh**. Run through the four "Step 3" items in
-**Diagnostics → Hardware checks**:
-
-1. **Windows tab**: your open apps appear with live thumbnails, their icons, and the process
-   name under the title (e.g. `POWERPNT`, `chrome`). ProjectorDesk itself is not listed.
-   UWP/Store apps may show `ApplicationFrameHost`; that's how Windows hosts them.
-2. **Minimized window**: minimize an app, come back to the panel. Its card **stays**, greyed out
-   with its last thumbnail and "Minimized · Restore this window to project it". Restore it; the
-   live thumbnail returns within ~2 s. An app minimized _before_ ProjectorDesk started is listed
-   too (no thumbnail yet). Electron omits minimized windows, so these come from the window
-   helper (`IsIconic` via the hidden PowerShell process).
-3. **Screens tab**: both screens are listed; the projector screen carries
-   "Output is on this screen".
-4. **Refresh + filter**: open a new app, return to the panel; it appears within ~2 s. Typing in
-   the filter narrows by title or app name.
-
-**Copy report** now includes a table of every listed source (title, process, HWND, icon,
-blank-thumbnail flag), so paste that back too.
-
-## Step 2 hardware check
-
-1. **Projector dropdown** (Projector card): lists every display with resolution, scale and colour
-   depth/space. "Automatic" picks the first non-primary display; the primary is shown but
-   disabled because it hosts the Control Panel.
-2. **Switch to Extend**: press Win+P → Duplicate. The banner "Projector not detected or set to
-   Duplicate" appears. Click **Switch to Extend**: the app runs `DisplaySwitch.exe /extend`
-   (falls back to `DisplaySwitch.exe 3`), waits for the second display and re-places the Output.
-3. **Main-display swap**: Settings → Display → select the projector → "Make this my main
-   display". The Control Panel follows the new primary and the Output moves to the other
-   screen. Swap back afterwards.
-4. **Unplug / replug**: Output hides immediately with a "Projector disconnected" banner, and
-   returns on the same display when it is plugged back in. A _different_ display plugged in is
-   treated as the new projector; a display that was already connected is never used silently.
-
-Mark the three step-2 items in **Hardware checks** (Pass unlocks only after the app has seen the
-event), then **Copy report**.
-
-## Known limits
-
-- Minimized windows cannot be captured. Restore them first.
-- DRM-protected content (Netflix, some players) shows as black.
-- Phase 1 output is SDR only. HDR sources are tone-mapped.
-- Content protection (recursive-mirror prevention) needs Windows 10 2004+. On older builds the app shows a persistent warning.
-- A window that is always-on-top on the projector display (e.g. a slide show with Presenter View) covers the Output. ProjectorDesk warns, but can't push it away; see "Slide shows" above.
-- The mouse cursor is always captured in Phase 1 (Chromium ignores "hide cursor").
-- Phase 1 capture-to-display latency measured on hardware is ~25 ms median (≈1.5 frames at
-  60 Hz), above the one-frame target; every session is recorded in `logs/sessions.jsonl` as
-  evidence for the native engine.
-- Restoring a minimized window that was maximized brings it to the front on your laptop screen (Windows can only re-maximize by activating it). The Control Panel takes focus back immediately.
+Display, DPI and capture bugs only show on real hardware. **Diagnostics → Hardware checks**
+lists every check with what to do; **Pass** unlocks only while the live layout actually
+demonstrates the item, and records a snapshot as evidence. **Copy report** includes the
+checklist. Results so far: [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md).

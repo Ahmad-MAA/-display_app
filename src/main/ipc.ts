@@ -38,5 +38,5 @@ export function sendToControl<K extends ControlEventChannel>(
   channel: K,
   payload: ControlEventMap[K],
 ): void {
-  if (wc && !wc.isDestroyed()) wc.send(channel, payload);
+  if (wc && !wc.isDestroyed() && !wc.isCrashed()) wc.send(channel, payload);
 }

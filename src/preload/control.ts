@@ -47,6 +47,8 @@ const api: ControlApi = {
   projectFavorite: (id) => invoke('favorites:project', id),
   setHotkeys: (acc) => invoke('settings:set-hotkeys', acc),
   resume: (accept) => invoke('settings:resume', accept),
+  reportError: (message) => invoke('app:report-error', message),
+  dismissError: () => invoke('app:dismiss-error'),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

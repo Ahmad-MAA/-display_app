@@ -30,6 +30,8 @@ export interface ControlApi {
   projectFavorite(favoriteId: string): Promise<ProjectResult>;
   setHotkeys(accelerators: Record<PresenterAction, string>): Promise<HotkeyStatus[]>;
   resume(accept: boolean): Promise<ProjectResult>;
+  reportError(message: string): Promise<void>;
+  dismissError(): Promise<void>;
 }
 
 export interface OutputApi {
@@ -42,4 +44,5 @@ export interface OutputApi {
   onDisplay(cb: (d: OutputDisplay) => void): () => void;
   onControls(cb: (c: OutputControls) => void): () => void;
   reportStats(stats: OutputStatsReport): void;
+  reportError(message: string): void;
 }

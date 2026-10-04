@@ -323,6 +323,15 @@ export class ElectronOutputEngine implements OutputEngine {
     });
   }
 
+  /** The Output page was reloaded after a crash: resend everything and restart the capture. */
+  recover(): void {
+    this.resync();
+    if (this.effective) {
+      this.startCapture(this.effective);
+      this.set({ ...this.projection, state: 'starting', token: this.token });
+    }
+  }
+
   /** End the current session (app quitting). */
   shutdown(): void {
     this.endSession();

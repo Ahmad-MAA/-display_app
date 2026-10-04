@@ -143,4 +143,23 @@ full screen).
 Container end-to-end run (Linux, Xvfb): Fill + a favorite + Blank rebound to Ctrl+Alt+J were
 written to `settings.json`; after a restart Fill, the favorite, the hotkey and the Resume banner
 were all back, Resume projected the window, and Ctrl+Alt+J blanked from outside the panel.
-Closing the Control Panel quits the app within ~2 s. Hardware: the "Step 7" items, pending.
+Closing the Control Panel quits the app within ~2 s.
+
+Hardware (2026-10-04, same machine): restart keeps Fill + projector and offers Resume → PASS;
+favorites survive a restart and the app being reopened → PASS; changed hotkey works globally,
+old one released, survives restart, reset restores defaults → PASS.
+
+Step 6 leftovers in the same report: **WMP Follow full screen → PASS** (fix `404e0d2`); global
+PgDn/PgUp keep WMP full screen → PASS. The "blinking caret" is the mouse pointer: over a text
+box it is an I-beam that Windows hides/shows while typing elsewhere. Same root cause as the
+cursor limit (Chromium always captures the pointer); documented under Known limits, the focus
+check item was retired. Not yet run: crop editor, VLC follow.
+
+# Step 8 (error handling, packaging)
+
+Container run (Linux, Xvfb): killing both renderer processes while projecting → both pages
+reloaded, the projection went live again by itself (~2 s), banner shown. Killing them four
+times within a minute → third crash within the window stops retries: Output hidden, Control
+Panel dialog offers "Restart ProjectorDesk". `electron-builder --win` (Wine) produced
+`ProjectorDesk-Setup-0.1.0.exe` and `ProjectorDesk-0.1.0-portable.exe` (~111 MB each).
+Hardware: the "Step 8" items, pending.

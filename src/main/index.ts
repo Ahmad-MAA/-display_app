@@ -6,7 +6,9 @@ import { DEFAULT_DISPLAY, FILL_MODES, nextFillMode } from '@shared/geometry';
 import { IDLE_PROJECTION, type ProjectResult } from '@shared/projection';
 import { DEFAULT_SETTINGS, matchSource, refOf, sameRef, type SourceRef } from '@shared/settings';
 import { randomUUID } from 'node:crypto';
+import { describeError } from '@shared/recovery';
 import { resolveTarget } from '@shared/targeting';
+import { guardRenderer } from './crashGuard';
 import { extendDisplays } from './displaySwitch';
 import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
@@ -36,6 +38,7 @@ let settings: SettingsStore | null = null;
 /** Saved last projection that is open again; offered once after startup. */
 let resumeOffer: { ref: SourceRef; sourceId: string } | null = null;
 let resumeHandled = false;
+let appError: string | null = null;
 const startedAt = Date.now();
 let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
@@ -82,8 +85,35 @@ function state(): AppState {
     focusCheck,
     settings: settings?.current ?? DEFAULT_SETTINGS,
     resumeOffer,
+    appError,
   };
 }
+
+/** Something failed unexpectedly: log it in full and tell the presenter in one line. */
+function reportAppError(where: string, err: unknown): void {
+  const detail = describeError(err);
+  log('error', `${where}: ${detail}`);
+  noteAppError(`${where}: ${detail.split('\n')[0] ?? detail}`);
+}
+
+/** Non-blocking error dialog: showErrorBox would freeze main, and with it the projector. */
+function showError(message: string): void {
+  void dialog.showMessageBox({ type: 'error', title: 'ProjectorDesk', message });
+}
+
+/** Banner text accumulates until dismissed, so a second problem doesn't hide the first. */
+function noteAppError(message: string): void {
+  appError = appError && !appError.includes(message) ? `${appError} ${message}` : message;
+  pushState();
+}
+
+// Never let one failed callback take the whole app (and the projector) down.
+process.on('uncaughtException', (err) => {
+  reportAppError('Unexpected error', err);
+});
+process.on('unhandledRejection', (reason) => {
+  reportAppError('Unexpected error', reason);
+});
 
 function ourWindows(): BrowserWindow[] {
   return [control, output?.win].filter(
@@ -295,9 +325,28 @@ function createControlWindow(): BrowserWindow {
     control = null;
     app.quit();
   });
+  guardRenderer(win, 'Control Panel', () => loadPage(win, 'control'), {
+    onReloaded: () => {
+      noteAppError('The Control Panel crashed and was reloaded. The projector was not affected.');
+    },
+    onGaveUp: (reason) => {
+      void dialog
+        .showMessageBox({
+          type: 'error',
+          title: 'ProjectorDesk',
+          message: reason,
+          buttons: ['Restart ProjectorDesk', 'Close'],
+          defaultId: 0,
+        })
+        .then(({ response }) => {
+          if (response === 0) app.relaunch();
+          app.quit();
+        });
+    },
+  });
   loadPage(win, 'control').catch((err: unknown) => {
     log('error', `Control Panel failed to load: ${String(err)}`);
-    dialog.showErrorBox('ProjectorDesk', `The Control Panel failed to load:\n${String(err)}`);
+    showError(`The Control Panel failed to load:\n${String(err)}`);
   });
   return win;
 }
@@ -336,12 +385,9 @@ async function stepSource(dir: 1 | -1): Promise<void> {
   if (next) await project(next.descriptor.sourceId);
 }
 
-function setOutputHidden(hidden: boolean): void {
+function setOutputHidden(hidden: boolean, why = 'by presenter (emergency hide)'): void {
   outputHiddenByUser = hidden;
-  log(
-    hidden ? 'warn' : 'info',
-    hidden ? 'Output hidden by presenter (emergency hide)' : 'Output shown again',
-  );
+  log(hidden ? 'warn' : 'info', hidden ? `Output hidden ${why}` : 'Output shown again');
   if (hidden) {
     output?.hide();
     pushState();
@@ -590,6 +636,16 @@ function registerIpc(): void {
     await placeOutput('manual re-place');
   });
   onOutput('output:viewport', outputWc, (v) => output?.setViewport(v));
+  onOutput('output:error', outputWc, (message) => {
+    reportAppError('Projector output error', message);
+  });
+  handle('app:report-error', controlWc, (message) => {
+    reportAppError('Control Panel error', message);
+  });
+  handle('app:dismiss-error', controlWc, () => {
+    appError = null;
+    pushState();
+  });
   onLog((entry) => {
     sendToControl(controlWc(), 'log:entry', entry);
   });
@@ -624,6 +680,7 @@ if (!app.requestSingleInstanceLock()) {
       pushState();
     });
     settings = new SettingsStore();
+    settings.onSaveError = noteAppError;
     preferredDisplayId = settings.current.preferredDisplayId;
     windowHelper = new WindowHelper({ scriptDir: app.getPath('userData') });
     hotkeys = registerHotkeys(settings.current.hotkeys, runAction);
@@ -645,6 +702,17 @@ if (!app.requestSingleInstanceLock()) {
     engine.setFillMode(settings.current.fillMode);
     void output.ready.then(() => {
       engine?.resync();
+    });
+    const out = output;
+    guardRenderer(out.win, 'Output', () => out.reload(), {
+      onReloaded: () => {
+        engine?.recover();
+        noteAppError('The projector output crashed and was restarted automatically.');
+      },
+      onGaveUp: (reason) => {
+        setOutputHidden(true, 'because its renderer keeps crashing');
+        noteAppError(`${reason} The projector shows your desktop; restart ProjectorDesk.`);
+      },
     });
     engine.onSession = (s) => {
       recordSession(s);

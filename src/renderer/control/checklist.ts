@@ -29,6 +29,18 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'step8-installer',
+    label:
+      'Step 8: run ProjectorDesk-Setup-<version>.exe → install, start it from the Start menu, project something; then uninstall it from Settings → Apps (your settings stay in %APPDATA%\\ProjectorDesk)',
+    requires: () => null,
+  },
+  {
+    id: 'step8-portable',
+    label:
+      'Step 8: run ProjectorDesk-<version>-portable.exe from a USB stick or Downloads (no install) → the app starts and projects',
+    requires: () => null,
+  },
+  {
     id: 'step7-restart',
     label:
       'Step 7: pick Fill, choose the projector in the dropdown, project a window, close ProjectorDesk and start it again → Fill and the projector are kept; a blue “Resume last projection?” banner offers that window; Resume projects it',
@@ -59,13 +71,6 @@ export const HARDWARE_CHECKS: readonly {
     requires: () => null,
   },
   {
-    id: 'focus-caret',
-    label:
-      'Caret: project the app that showed a blinking caret, Diagnostics → “Check focus in 5 s”, click into another app and type; the result is in the report',
-    requires: (_l, s) =>
-      s.focusCheck?.includes('foreground') ? null : 'run the focus check first',
-  },
-  {
     id: 'helper-running',
     label:
       'Window helper fix: NO amber “Window helper unavailable” banner; process names are back in the Windows tab',
@@ -91,12 +96,6 @@ export const HARDWARE_CHECKS: readonly {
     label:
       'Step 6: S shows the stats overlay on the projector (fps, dropped, latency); Now projecting shows the same line',
     requires: (_l, s) => (s.stats ? null : 'project something live first'),
-  },
-  {
-    id: 'step6-cursor',
-    label:
-      'Step 6: C hides the mouse cursor on the projector (or the panel says this capture ignored it); C again shows it',
-    requires: () => null,
   },
   {
     id: 'step6-hide',
@@ -132,18 +131,6 @@ export const HARDWARE_CHECKS: readonly {
     id: 'blank-terminal',
     label:
       'Step 5: project a mostly-black terminal (cmd / Windows Terminal) → NO “showing black” warning',
-    requires: () => null,
-  },
-  {
-    id: 'covering-warning',
-    label:
-      'Covering warning: start a WPS/PowerPoint slide show WITH Presenter View → red “Another window is covering the projector” appears; ends → warning clears',
-    requires: () => null,
-  },
-  {
-    id: 'follow-wmp',
-    label:
-      'Follow full screen: project Windows Media Player, press its full-screen button → video stays on the projector (“Following full screen”); exit → back to the WMP window',
     requires: () => null,
   },
   {

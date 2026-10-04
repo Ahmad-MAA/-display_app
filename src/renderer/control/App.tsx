@@ -212,6 +212,18 @@ function DisplayBanners({ state }: { state: AppState }) {
 
   return (
     <>
+      {state.appError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-rose-700 bg-rose-950/60 p-3 text-sm text-rose-200"
+        >
+          <span className="flex-1">
+            <strong>Something went wrong.</strong> {state.appError} Details are in Diagnostics →
+            Log.
+          </span>
+          <Button onClick={() => void api.dismissError()}>Dismiss</Button>
+        </div>
+      )}
       {(single || lost) && (
         <div
           role="alert"

@@ -1,3 +1,4 @@
+import './errors';
 import './capture';
 import './display';
 import './controls';

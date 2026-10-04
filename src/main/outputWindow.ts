@@ -103,8 +103,14 @@ export class OutputWindow {
     });
   }
 
+  /** Load the Output page again (after its renderer crashed). */
+  reload(): Promise<void> {
+    return loadPage(this.win, 'output');
+  }
+
   send<K extends OutputEventChannel>(channel: K, payload: OutputEventMap[K]): void {
-    if (!this.win.isDestroyed()) this.win.webContents.send(channel, payload);
+    const wc = this.win.webContents;
+    if (!this.win.isDestroyed() && !wc.isCrashed()) wc.send(channel, payload);
   }
 
   get isVisible(): boolean {

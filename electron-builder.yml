@@ -1,18 +1,31 @@
 appId: app.projectordesk
 productName: ProjectorDesk
+copyright: Copyright © 2026 ProjectorDesk contributors
 directories:
   buildResources: resources
   output: dist
 files:
   - out/**
   - package.json
+# No auto-update feed: releases are installed by hand.
+publish: null
 win:
+  icon: resources/icon.ico
   target:
-    - nsis
-    - portable
-  artifactName: ${productName}-${version}-${arch}.${ext}
+    - target: nsis
+      arch: x64
+    - target: portable
+      arch: x64
+  requestedExecutionLevel: asInvoker
 nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ProjectorDesk
+  # Settings, favorites and logs in %APPDATA%\ProjectorDesk survive an uninstall/upgrade.
+  deleteAppDataOnUninstall: false
 portable:
-  artifactName: ${productName}-${version}-portable.exe
+  artifactName: ${productName}-${version}-portable.${ext}
