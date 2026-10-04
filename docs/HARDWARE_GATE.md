@@ -89,3 +89,16 @@ Findings:
   "covering the projector" warning; workaround documented (slide show on Monitor 1, Presenter View off).
 - Restoring a minimized-while-maximized window shows it maximized in front (expected: activation
   is required to re-maximize).
+
+# Step 5 hardware check — results
+
+Same hardware, 2026-10-04. Fill modes, crop reset on source switch and the terminal black-frame
+fix PASS (crop editor itself untested).
+
+**Covering warning FAILED**, and the report exposed why: `Window helper unavailable (could not
+start PowerShell: Error: spawn ENAMETOOLONG)`. The helper script was passed with
+`-EncodedCommand` (35,412 chars), over Windows' 32,767-character command-line limit after the
+follow/covering code was added. Everything helper-based was silently off in that build (process
+names "0 with process name", minimized windows, Follow full screen, covering warning).
+Fix: script written to userData and run via a short ScriptBlock bootstrap (<2,000 chars);
+helper failures now show a Control Panel banner and appear in Copy report. Re-test needed.

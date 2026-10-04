@@ -249,6 +249,18 @@ function DisplayBanners({ state }: { state: AppState }) {
           {result.message}
         </div>
       )}
+      {state.windowHelper.supported && state.windowHelper.reason && (
+        <div
+          role="alert"
+          className="rounded-md border border-amber-700 bg-amber-950/50 p-3 text-sm text-amber-200"
+        >
+          <strong>Window helper unavailable.</strong> Process names, minimized windows, Follow full
+          screen and the “covering the projector” warning are off. Projecting still works.
+          <span className="mt-1 block font-mono text-xs text-amber-200/80">
+            {state.windowHelper.reason}
+          </span>
+        </div>
+      )}
       {state.coveredBy.length > 0 && state.outputVisible && (
         <div
           role="alert"

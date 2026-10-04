@@ -96,4 +96,9 @@ export interface AppState {
   coveredBy: CoveringWindow[];
   /** Fill mode + crop currently applied on the Output. */
   display: OutputDisplay;
+  /**
+   * The hidden PowerShell window helper (process names, minimized windows, Follow full
+   * screen, covering warning). `reason` is set when it isn't working.
+   */
+  windowHelper: { supported: boolean; reason: string | null };
 }

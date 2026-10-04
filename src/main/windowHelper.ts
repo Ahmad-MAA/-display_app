@@ -1,4 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { Rect } from '@shared/displays';
 import type { WinInfo } from '@shared/follow';
@@ -17,6 +19,24 @@ import { WINDOW_HELPER_SCRIPT } from './windowHelper.ps1';
  * session, logs once, and callers get empty results; enumeration still works without it.
  */
 const REQUEST_TIMEOUT_MS = 5000;
+
+/**
+ * Windows caps a command line at 32,767 characters. Passing the whole script with
+ * -EncodedCommand (UTF-16 → base64, ~2.7× its size) broke once it grew past ~12 KB
+ * (spawn ENAMETOOLONG on hardware). Instead the script is written to a file and a tiny
+ * bootstrap runs it as a ScriptBlock, which, unlike `-File`, isn't subject to the
+ * execution policy (some managed PCs enforce AllSigned).
+ */
+export function bootstrapCommand(scriptPath: string): string {
+  const quoted = scriptPath.replace(/'/g, "''");
+  return `& ([ScriptBlock]::Create([IO.File]::ReadAllText('${quoted}')))`;
+}
+
+export function encodePowerShell(command: string): string {
+  return Buffer.from(command, 'utf16le').toString('base64');
+}
+
+export const MAX_WINDOWS_COMMAND_LINE = 32767;
 
 function toRect(v: unknown): Rect | null {
   if (!v || typeof v !== 'object') return null;
@@ -71,12 +91,27 @@ export class WindowHelper {
   private disabled: boolean;
   private lastOpError: string | null = null;
   private readonly exe: string;
+  private readonly scriptDir: string;
+  private failure: string | null = null;
 
-  /** `exe` is overridable so the protocol can be exercised with pwsh off Windows. */
-  constructor(opts: { exe?: string } = {}) {
+  /**
+   * `scriptDir`: where the helper script is written (userData). `exe` is overridable so
+   * the protocol can be exercised with pwsh off Windows.
+   */
+  constructor(opts: { scriptDir: string; exe?: string }) {
     this.exe = opts.exe ?? 'powershell.exe';
+    this.scriptDir = opts.scriptDir;
     this.disabled = opts.exe === undefined && process.platform !== 'win32';
+    if (this.disabled) this.failure = 'only available on Windows';
   }
+
+  /** Why the helper is off (null while it works or hasn't been needed yet). */
+  get unavailableReason(): string | null {
+    return this.failure;
+  }
+
+  /** Called once if the helper stops working, so the UI can say so. */
+  onUnavailable: ((reason: string) => void) | null = null;
 
   get available(): boolean {
     return !this.disabled;
@@ -98,7 +133,17 @@ export class WindowHelper {
         done(false);
       }, STARTUP_TIMEOUT_MS);
 
-      const encoded = Buffer.from(WINDOW_HELPER_SCRIPT, 'utf16le').toString('base64');
+      let encoded: string;
+      try {
+        mkdirSync(this.scriptDir, { recursive: true });
+        const scriptPath = join(this.scriptDir, 'window-helper.ps1');
+        writeFileSync(scriptPath, WINDOW_HELPER_SCRIPT, 'utf8');
+        encoded = encodePowerShell(bootstrapCommand(scriptPath));
+      } catch (err) {
+        this.fail(`could not write the helper script: ${String(err)}`);
+        done(false);
+        return;
+      }
       let child: ChildProcessWithoutNullStreams;
       try {
         child = spawn(
@@ -155,6 +200,8 @@ export class WindowHelper {
   private fail(reason: string): void {
     if (this.disabled) return;
     this.disabled = true;
+    this.failure = reason;
+    this.onUnavailable?.(reason);
     log(
       'warn',
       `Window helper unavailable (${reason}); process names and minimized windows won't be listed`,

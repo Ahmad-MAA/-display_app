@@ -85,6 +85,9 @@ export function buildReport(
 ### Content protection
 ${cp ? `${cp.ok ? '✅' : '❌'} ${cp.message} (platform ${cp.platform} ${cp.osVersion}, isContentProtected=${cp.reportedByElectron})` : 'n/a'}
 
+### Window helper
+${state.windowHelper.supported ? (state.windowHelper.reason ? `❌ unavailable: ${state.windowHelper.reason}` : '✅ running (or not needed yet)') : 'n/a (not Windows)'}
+
 ### Displays
 | id | label | bounds (DIP) | scale | native px | Hz | colorDepth | colorSpace |
 |---|---|---|---|---|---|---|---|

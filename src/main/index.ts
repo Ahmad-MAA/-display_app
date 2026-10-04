@@ -21,7 +21,7 @@ let sources: SourceService | null = null;
 let engine: ElectronOutputEngine | null = null;
 let follower: FullscreenFollower | null = null;
 let coverWatcher: CoverWatcher | null = null;
-const windowHelper = new WindowHelper();
+let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
 let lostDisplayId: number | null = null;
@@ -53,6 +53,10 @@ function state(): AppState {
     followFullscreen: follower?.enabled ?? true,
     coveredBy: coverWatcher?.current ?? [],
     display: engine?.currentDisplay ?? DEFAULT_DISPLAY,
+    windowHelper: {
+      supported: process.platform === 'win32',
+      reason: windowHelper?.unavailableReason ?? null,
+    },
   };
 }
 
@@ -386,6 +390,10 @@ if (!app.requestSingleInstanceLock()) {
       lastPlacement = report;
       pushState();
     });
+    windowHelper = new WindowHelper({ scriptDir: app.getPath('userData') });
+    windowHelper.onUnavailable = () => {
+      pushState();
+    };
     engine = new ElectronOutputEngine(output, controlWc, () => {
       pushState();
     });
@@ -432,7 +440,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     sources?.dispose();
     coverWatcher?.dispose();
-    windowHelper.dispose();
+    windowHelper?.dispose();
     output?.destroy();
   });
 }
