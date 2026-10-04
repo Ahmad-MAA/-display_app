@@ -2,7 +2,7 @@
  * Typed IPC contract between main, the Control Panel and the Output window.
  * Every channel name and payload type lives here; nothing crosses IPC as `any`.
  */
-import type { AppState, LogEntry, OutputViewport } from './diagnostics';
+import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
 import type { DisplayInfo } from './displays';
 
 /** Control Panel → main, request/response (ipcRenderer.invoke / ipcMain.handle). */
@@ -11,6 +11,10 @@ export interface ControlInvokeMap {
   'logs:get': { args: []; result: LogEntry[] };
   'output:set-test-pattern': { args: [on: boolean]; result: void };
   'output:replace': { args: []; result: void };
+  /** null = automatic target selection. */
+  'displays:set-target': { args: [displayId: number | null]; result: void };
+  /** Run `DisplaySwitch.exe /extend`, then re-scan. */
+  'displays:extend': { args: []; result: ExtendResult };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -44,6 +48,8 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'logs:get',
   'output:set-test-pattern',
   'output:replace',
+  'displays:set-target',
+  'displays:extend',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

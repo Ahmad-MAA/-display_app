@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
-import { findDisplay, listDisplays, pickTargetDisplay } from './displays';
+import { resolveTarget } from '@shared/targeting';
+import { extendDisplays } from './displaySwitch';
+import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
 import { OutputWindow } from './outputWindow';
@@ -9,10 +11,14 @@ import { lockDownNavigation, loadPage, preloadPath } from './windows';
 let control: BrowserWindow | null = null;
 let output: OutputWindow | null = null;
 let targetDisplayId: number | null = null;
+let preferredDisplayId: number | null = null;
+let lostDisplayId: number | null = null;
 let testPattern = false;
 let lastPlacement: PlacementReport | null = null;
 let awaitingReplug = false;
 let hotplugRecoveries = 0;
+let extendSuccesses = 0;
+let primarySwaps = 0;
 
 const controlWc = () => (control && !control.isDestroyed() ? control.webContents : null);
 const outputWc = () => (output && !output.win.isDestroyed() ? output.win.webContents : null);
@@ -22,11 +28,15 @@ function state(): AppState {
     displays: listDisplays(),
     primaryDisplayId: screen.getPrimaryDisplay().id,
     targetDisplayId,
+    preferredDisplayId,
+    lostDisplayId,
     outputVisible: output?.isVisible ?? false,
     testPattern,
     contentProtection: output?.contentProtection ?? null,
     placement: lastPlacement,
     hotplugRecoveries,
+    extendSuccesses,
+    primarySwaps,
   };
 }
 
@@ -47,19 +57,30 @@ function pushTestPattern(display: Display | undefined): void {
 /** Choose the projector display and (re)place the Output window there. */
 async function placeOutput(reason: string): Promise<void> {
   if (!output) return;
-  const target = pickTargetDisplay(targetDisplayId);
+  const all = screen.getAllDisplays();
+  const targetId = resolveTarget({
+    displayIds: all.map((d) => d.id),
+    primaryId: screen.getPrimaryDisplay().id,
+    preferredId: preferredDisplayId,
+    currentId: targetDisplayId,
+    lostId: lostDisplayId,
+  });
+  const target = all.find((d) => d.id === targetId);
   if (!target) {
-    if (targetDisplayId !== null || output.isVisible) {
+    if (lostDisplayId !== null) {
+      // Waiting for the unplugged projector; keep targetDisplayId for the UI.
+    } else if (targetDisplayId !== null || output.isVisible) {
       log(
         'warn',
         `No secondary display (${reason}). Projector not detected or set to Duplicate; Output hidden.`,
       );
+      targetDisplayId = null;
     }
-    targetDisplayId = null;
     output.hide();
     pushState();
     return;
   }
+  if (lostDisplayId === target.id) lostDisplayId = null;
   targetDisplayId = target.id;
   log('info', `Placing Output on display ${target.id} "${target.label || 'unnamed'}" (${reason})`);
   await output.placeOn(target);
@@ -72,6 +93,29 @@ async function placeOutput(reason: string): Promise<void> {
   pushState();
 }
 
+let lastPrimaryId: number | null = null;
+
+/** Keep the Control Panel on the primary; if the user swaps primaries, follow it. */
+function keepControlOnPrimary(): void {
+  const primary = screen.getPrimaryDisplay();
+  const prev = lastPrimaryId;
+  lastPrimaryId = primary.id;
+  if (prev === null || prev === primary.id || !control || control.isDestroyed()) return;
+  const wa = primary.workArea;
+  const [w = 1280, h = 860] = control.getSize();
+  const width = Math.min(w, wa.width);
+  const height = Math.min(h, wa.height);
+  if (control.isMaximized()) control.unmaximize();
+  control.setBounds({
+    x: wa.x + Math.round((wa.width - width) / 2),
+    y: wa.y + Math.round((wa.height - height) / 2),
+    width,
+    height,
+  });
+  primarySwaps++;
+  log('info', `Primary display changed (${prev} → ${primary.id}); Control Panel moved to it`);
+}
+
 let displayTimer: NodeJS.Timeout | null = null;
 /** Windows fires bursts of display events (esp. on hot-plug); coalesce them. */
 function schedulePlacement(reason: string): void {
@@ -79,6 +123,7 @@ function schedulePlacement(reason: string): void {
   if (displayTimer) clearTimeout(displayTimer);
   displayTimer = setTimeout(() => {
     displayTimer = null;
+    keepControlOnPrimary();
     void placeOutput(reason);
   }, 300);
 }
@@ -89,6 +134,11 @@ function watchDisplays(): void {
       'info',
       `Display added: ${d.id} "${d.label}" ${d.bounds.width}×${d.bounds.height} scale ${d.scaleFactor}`,
     );
+    if (lostDisplayId !== null && d.id !== lostDisplayId) {
+      // A different display was plugged in: treat it as the new projector.
+      log('info', `New display ${d.id} replaces unplugged projector ${lostDisplayId}`);
+      lostDisplayId = null;
+    }
     schedulePlacement('display added');
   });
   screen.on('display-removed', (_e, d) => {
@@ -97,6 +147,7 @@ function watchDisplays(): void {
       // Hide immediately; don't wait for the debounce.
       output?.hide();
       awaitingReplug = true;
+      lostDisplayId = d.id;
       log('warn', 'Projector display was unplugged mid-session; Output hidden.');
       pushState();
     }
@@ -154,6 +205,24 @@ function registerIpc(): void {
     pushTestPattern(targetDisplayId !== null ? findDisplay(targetDisplayId) : undefined);
     pushState();
   });
+  handle('displays:set-target', controlWc, async (id) => {
+    const display = id === null ? null : findDisplay(id);
+    if (id !== null && (!display || display.id === screen.getPrimaryDisplay().id)) {
+      log('warn', `Ignoring target ${id}: not a connected secondary display`);
+      return;
+    }
+    preferredDisplayId = id;
+    lostDisplayId = null;
+    log('info', id === null ? 'Projector display: automatic' : `Projector display set to ${id}`);
+    await placeOutput('user changed projector display');
+  });
+  handle('displays:extend', controlWc, async () => {
+    const result = await extendDisplays();
+    await placeOutput('after DisplaySwitch /extend');
+    if (result.ok && output?.isVisible) extendSuccesses++;
+    pushState();
+    return result;
+  });
   handle('output:replace', controlWc, async () => {
     await placeOutput('manual re-place');
   });
@@ -186,6 +255,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     registerIpc();
     control = createControlWindow();
+    lastPrimaryId = screen.getPrimaryDisplay().id;
     output = new OutputWindow((report) => {
       lastPlacement = report;
       pushState();

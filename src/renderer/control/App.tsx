@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { AppState, PlacementReport } from '@shared/diagnostics';
-import { formatRect, isHdrDisplay, type DisplayInfo } from '@shared/displays';
+import type { AppState, ExtendResult, PlacementReport } from '@shared/diagnostics';
+import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@shared/displays';
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
 import { useAppState, useLogs } from './useAppState';
 
 const api = window.projectorDesk;
-// v2: v1 results were recorded without per-item layout evidence and are discarded.
-const CHECKS_KEY = 'projectordesk.hardwareChecks.v2';
+// v3: step-1 results are archived in docs/HARDWARE_GATE.md; step 2 re-tests hot-plug.
+const CHECKS_KEY = 'projectordesk.hardwareChecks.v3';
 
 const UNTESTED: CheckRecord = { result: 'untested', snapshot: null };
 
@@ -130,6 +130,139 @@ function PlacementCard({ p }: { p: PlacementReport | null }) {
   );
 }
 
+function displayOptionLabel(d: DisplayInfo): string {
+  return `${d.label} — ${d.nativeSize.width}×${d.nativeSize.height} px · ${Math.round(d.scaleFactor * 100)}% · ${d.colorDepth}-bit ${shortColorSpace(d.colorSpace)}`;
+}
+
+function ProjectorPicker({ state }: { state: AppState }) {
+  const secondaries = state.displays.filter((d) => !d.isPrimary);
+  const primary = state.displays.find((d) => d.isPrimary);
+  const target = state.displays.find((d) => d.id === state.targetDisplayId);
+  const value = state.preferredDisplayId === null ? 'auto' : String(state.preferredDisplayId);
+  return (
+    <div className="space-y-3 text-sm">
+      <label className="block">
+        <span className="mb-1 block text-xs text-slate-400">Projector display</span>
+        <select
+          className="w-full rounded-md bg-slate-800 px-2 py-1.5 ring-1 ring-slate-700"
+          value={value}
+          onChange={(e) => {
+            const v = e.target.value;
+            void api.setTargetDisplay(v === 'auto' ? null : Number(v));
+          }}
+        >
+          <option value="auto">Automatic (first non-primary display)</option>
+          {secondaries.map((d) => (
+            <option key={d.id} value={String(d.id)}>
+              {displayOptionLabel(d)}
+            </option>
+          ))}
+          {primary && (
+            <option disabled value={String(primary.id)}>
+              {displayOptionLabel(primary)} (primary — Control Panel)
+            </option>
+          )}
+        </select>
+      </label>
+      {target ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={state.outputVisible ? 'ok' : 'muted'}>
+            {state.outputVisible ? 'Output on' : 'Output hidden for'} {target.label}
+          </Badge>
+          <Badge tone="muted">
+            {target.bounds.width}×{target.bounds.height} DIP · {target.displayFrequency} Hz
+          </Badge>
+          {primary && primary.scaleFactor !== target.scaleFactor && (
+            <Badge tone="warn">
+              DPI mismatch: primary {Math.round(primary.scaleFactor * 100)}%, projector{' '}
+              {Math.round(target.scaleFactor * 100)}% — placement verified per display
+            </Badge>
+          )}
+          {isHdrDisplay(target) && <Badge tone="warn">HDR display</Badge>}
+        </div>
+      ) : (
+        <p className="text-slate-400">No projector display selected.</p>
+      )}
+    </div>
+  );
+}
+
+function DisplayBanners({ state }: { state: AppState }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ExtendResult | null>(null);
+  const single = state.displays.length < 2;
+  const lost = state.lostDisplayId !== null;
+  const p = state.placement;
+
+  const extend = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await api.extendDisplays());
+    } catch (err) {
+      setResult({ ok: false, displayCount: state.displays.length, message: String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {(single || lost) && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-amber-700 bg-amber-950/50 p-3 text-sm text-amber-200"
+        >
+          <span className="flex-1">
+            {lost ? (
+              <>
+                <strong>Projector disconnected.</strong> The Output is hidden and will come back
+                automatically when the display is reconnected
+                {single ? ' (in Extend mode)' : ''}.
+              </>
+            ) : (
+              <>
+                <strong>Projector not detected or set to Duplicate.</strong> Connect the projector
+                and switch Windows to Extend (Win+P → Extend).
+              </>
+            )}
+          </span>
+          {single && (
+            <Button disabled={busy} onClick={() => void extend()}>
+              {busy ? 'Switching…' : 'Switch to Extend'}
+            </Button>
+          )}
+          {lost && !single && (
+            <Button onClick={() => void api.setTargetDisplay(null)}>Use another display</Button>
+          )}
+          {result && (
+            <span className={`w-full ${result.ok ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {result.message}
+            </span>
+          )}
+        </div>
+      )}
+      {result?.ok && !single && !lost && (
+        <div className="rounded-md border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-200">
+          {result.message}
+        </div>
+      )}
+      {p && !p.ok && state.outputVisible && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-rose-700 bg-rose-950/60 p-3 text-sm text-rose-200"
+        >
+          <span className="flex-1">
+            <strong>The Output does not exactly cover the projector.</strong>{' '}
+            {p.problems.join('; ')}
+          </span>
+          <Button onClick={() => void api.replaceOutput()}>Re-place output</Button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function DisplaysTable({
   displays,
   targetId,
@@ -164,7 +297,7 @@ function DisplaysTable({
               </td>
               <td className="py-1.5 pr-3">{d.displayFrequency}</td>
               <td className="py-1.5 pr-3">
-                {d.colorDepth}-bit {d.colorSpace}{' '}
+                {d.colorDepth}-bit {shortColorSpace(d.colorSpace)}{' '}
                 {isHdrDisplay(d) && <Badge tone="warn">HDR</Badge>}
               </td>
               <td className="py-1.5 pr-3 font-sans">
@@ -280,7 +413,6 @@ export function App() {
   if (!state) return <div className="p-6 text-slate-400">Loading…</div>;
 
   const cp = state.contentProtection;
-  const single = state.displays.length < 2;
 
   const copyReport = async () => {
     await navigator.clipboard.writeText(buildReport(state, checks, logs));
@@ -321,22 +453,19 @@ export function App() {
             <strong>Recursive-mirror protection unavailable.</strong> {cp.message}
           </div>
         )}
-        {single && (
-          <div
-            role="alert"
-            className="rounded-md border border-amber-700 bg-amber-950/50 p-3 text-sm text-amber-200"
-          >
-            <strong>Projector not detected or set to Duplicate.</strong> Press Win+P and choose
-            “Extend”. The Output window will appear automatically.
-          </div>
-        )}
+        <DisplayBanners state={state} />
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Output placement">
-            <PlacementCard p={state.placement} />
-          </Card>
+          <div className="space-y-4">
+            <Card title="Projector">
+              <ProjectorPicker state={state} />
+            </Card>
+            <Card title="Output placement">
+              <PlacementCard p={state.placement} />
+            </Card>
+          </div>
           <Card
-            title="Step 1 hardware gate"
+            title="Hardware checks"
             right={<span className="text-xs text-slate-500">saved locally</span>}
           >
             <Checklist state={state} checks={checks} setChecks={setChecks} />

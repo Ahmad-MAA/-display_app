@@ -47,3 +47,11 @@ export function isHdrDisplay(d: Pick<DisplayInfo, 'colorDepth' | 'colorSpace'>):
     cs.includes('BT2020')
   );
 }
+
+/** "{primaries:BT709, transfer:SRGB, ...}" → "BT709/SRGB" for compact UI labels. */
+export function shortColorSpace(cs: string): string {
+  const primaries = /primaries:([^,}]+)/.exec(cs)?.[1]?.trim();
+  const transfer = /transfer:([^,}]+)/.exec(cs)?.[1]?.trim();
+  if (!primaries && !transfer) return cs;
+  return [primaries, transfer].filter(Boolean).join('/');
+}

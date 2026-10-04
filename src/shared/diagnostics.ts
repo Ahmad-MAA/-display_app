@@ -61,15 +61,29 @@ export interface LogEntry {
   message: string;
 }
 
+export interface ExtendResult {
+  ok: boolean;
+  displayCount: number;
+  message: string;
+}
+
 /** Full state pushed to the Control Panel whenever something changes. */
 export interface AppState {
   displays: DisplayInfo[];
   primaryDisplayId: number;
   targetDisplayId: number | null;
+  /** User override from the dropdown; null = automatic (first non-primary). */
+  preferredDisplayId: number | null;
+  /** Projector that was unplugged mid-session; Output stays hidden until it returns. */
+  lostDisplayId: number | null;
   outputVisible: boolean;
   testPattern: boolean;
   contentProtection: ContentProtectionStatus | null;
   placement: PlacementReport | null;
   /** Times this session the projector was unplugged and Output was restored correctly on replug. */
   hotplugRecoveries: number;
+  /** Successful "Switch to Extend" (DisplaySwitch.exe) runs this session. */
+  extendSuccesses: number;
+  /** Times the user made another monitor primary and the Control Panel followed. */
+  primarySwaps: number;
 }

@@ -23,6 +23,13 @@ Each renderer gets its own preload with only the calls it needs. The main proces
 3. `showInactive()`, then `setFullScreen(true)`. Verify the bounds and `screen.getDisplayMatching()` again. If either is wrong, leave full screen, set the bounds again and re-enter.
 4. The Output renderer reports `innerWidth/innerHeight/devicePixelRatio`. Main cross-checks these against the display's DIP size and scale factor, which catches a window rendered at the wrong DPI.
 
+Target selection is a pure function (`src/shared/targeting.ts`, unit-tested): user override →
+current target → first non-primary; the primary is never a target. After the target is
+unplugged the Output stays hidden until that display returns, a new display is added, or the
+user picks one. If the user makes another monitor primary, the Control Panel moves to it.
+"Switch to Extend" runs `DisplaySwitch.exe /extend` (`src/main/displaySwitch.ts`) and polls for
+the second display.
+
 Display events (`display-added`, `display-removed`, `display-metrics-changed`) are coalesced over 300 ms, and placements are serialized. If the target display is removed, the Output window hides immediately.
 
 ## Recursive-mirror prevention

@@ -29,6 +29,26 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'extend-button',
+    label: 'Step 2: Win+P → Duplicate, then "Switch to Extend" brings the Output back',
+    requires: (_l, s) =>
+      s.extendSuccesses > 0 ? null : 'set Duplicate (Win+P), then click "Switch to Extend"',
+  },
+  {
+    id: 'primary-swap',
+    label: 'Step 2: make the projector the main display → Control Panel and Output swap screens',
+    requires: (_l, s) =>
+      s.primarySwaps > 0
+        ? null
+        : 'Settings → Display → select projector → "Make this my main display" (then swap back)',
+  },
+  {
+    id: 'hotplug',
+    label: 'Unplug and replug the projector while the app is running (re-test in step 2)',
+    requires: (_l, s) =>
+      s.hotplugRecoveries > 0 ? null : 'no unplug → replug recovery seen this session yet',
+  },
+  {
     id: 'dpi-primary-high',
     label: 'Primary at 125% or 150%, secondary at 100%',
     requires: ({ primary, secondary }) =>
@@ -79,12 +99,6 @@ export const HARDWARE_CHECKS: readonly {
         ? `Projector is currently at ${d.nativeSize.width}×${d.nativeSize.height} px. Pass only if that is NOT its native resolution (Settings → Display → Display resolution).`
         : 'Set the projector to a non-native resolution.';
     },
-  },
-  {
-    id: 'hotplug',
-    label: 'Unplug and replug the projector while the app is running',
-    requires: (_l, s) =>
-      s.hotplugRecoveries > 0 ? null : 'no unplug → replug recovery seen this session yet',
   },
 ];
 

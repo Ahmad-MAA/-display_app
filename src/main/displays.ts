@@ -30,18 +30,3 @@ export function listDisplays(): DisplayInfo[] {
 export function findDisplay(id: number): Display | undefined {
   return screen.getAllDisplays().find((d) => d.id === id);
 }
-
-/**
- * Target = preferred display if still connected and not primary,
- * otherwise the first non-primary display. null when only one display exists
- * (no projector, or Windows is in Duplicate mode).
- */
-export function pickTargetDisplay(preferredId: number | null): Display | null {
-  const primaryId = screen.getPrimaryDisplay().id;
-  const all = screen.getAllDisplays();
-  if (preferredId !== null) {
-    const preferred = all.find((d) => d.id === preferredId && d.id !== primaryId);
-    if (preferred) return preferred;
-  }
-  return all.find((d) => d.id !== primaryId) ?? null;
-}

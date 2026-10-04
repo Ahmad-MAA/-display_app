@@ -30,6 +30,8 @@ const api: ControlApi = {
   getLogs: () => invoke('logs:get'),
   setTestPattern: (on: boolean) => invoke('output:set-test-pattern', on),
   replaceOutput: () => invoke('output:replace'),
+  setTargetDisplay: (displayId) => invoke('displays:set-target', displayId),
+  extendDisplays: () => invoke('displays:extend'),
   onState: (cb: (s: ControlEventMap['state:changed']) => void) => on('state:changed', cb),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };

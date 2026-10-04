@@ -7,9 +7,9 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 1 complete — hardware gate passed (see [`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).** Display
-> placement, mixed-DPI verification, content protection and basic hot-plug
-> handling are in place. Source selection and capture come in later steps.
+> **Status: step 2 (display detection & hot-plug) — awaiting hardware check.** Step 1
+> passed its hardware gate ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)). Source
+> selection and capture come in later steps.
 
 ## Setup
 
@@ -49,6 +49,24 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Step 2 hardware check
+
+1. **Projector dropdown** (Projector card): lists every display with resolution, scale and colour
+   depth/space. "Automatic" picks the first non-primary display; the primary is shown but
+   disabled because it hosts the Control Panel.
+2. **Switch to Extend**: press Win+P → Duplicate. The banner "Projector not detected or set to
+   Duplicate" appears. Click **Switch to Extend**: the app runs `DisplaySwitch.exe /extend`
+   (falls back to `DisplaySwitch.exe 3`), waits for the second display and re-places the Output.
+3. **Main-display swap**: Settings → Display → select the projector → "Make this my main
+   display". The Control Panel follows the new primary and the Output moves to the other
+   screen. Swap back afterwards.
+4. **Unplug / replug**: Output hides immediately with a "Projector disconnected" banner, and
+   returns on the same display when it is plugged back in. A _different_ display plugged in is
+   treated as the new projector; a display that was already connected is never used silently.
+
+Mark the three step-2 items in **Hardware checks** (Pass unlocks only after the app has seen the
+event), then **Copy report**.
 
 ## Known limits
 
