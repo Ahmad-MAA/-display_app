@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
 import { formatRect, isHdrDisplay, type DisplayInfo } from '@shared/displays';
-import { HARDWARE_CHECKS, type CheckId, type CheckResult } from './checklist';
+import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
 import { useAppState, useLogs } from './useAppState';
 
 const api = window.projectorDesk;
-const CHECKS_KEY = 'projectordesk.hardwareChecks.v1';
+// v2: v1 results were recorded without per-item layout evidence and are discarded.
+const CHECKS_KEY = 'projectordesk.hardwareChecks.v2';
+
+const UNTESTED: CheckRecord = { result: 'untested', snapshot: null };
 
 function loadChecks(): Record<CheckId, CheckRecord> {
-  const empty = Object.fromEntries(
-    HARDWARE_CHECKS.map((c) => [c.id, { result: 'untested', snapshot: null }]),
-  ) as Record<CheckId, CheckRecord>;
+  const empty: Record<CheckId, CheckRecord> = Object.fromEntries(
+    HARDWARE_CHECKS.map((c) => [c.id, UNTESTED]),
+  );
   try {
     const raw = localStorage.getItem(CHECKS_KEY);
     if (!raw) return empty;
-    return { ...empty, ...(JSON.parse(raw) as Partial<Record<CheckId, CheckRecord>>) };
+    return { ...empty, ...(JSON.parse(raw) as Record<CheckId, CheckRecord>) };
   } catch {
     return empty;
   }
@@ -194,7 +197,8 @@ function Checklist({
   return (
     <ul className="space-y-2 text-sm">
       {HARDWARE_CHECKS.map((c) => {
-        const r = checks[c.id];
+        const r = checks[c.id] ?? UNTESTED;
+        const blocker = passBlocker(c.id, state);
         return (
           <li key={c.id} className="rounded-md border border-slate-800 p-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -202,6 +206,8 @@ function Checklist({
               <span className="flex gap-1">
                 <Button
                   active={r.result === 'pass'}
+                  disabled={blocker !== null && r.result !== 'pass'}
+                  title={blocker ?? 'Current layout demonstrates this item'}
                   onClick={() => {
                     mark(c.id, 'pass');
                   }}
@@ -225,6 +231,15 @@ function Checklist({
                 </Button>
               </span>
             </div>
+            {r.result === 'untested' && (
+              <p
+                className={`mt-1 text-[11px] ${blocker ? 'text-amber-300/80' : 'text-emerald-300/80'}`}
+              >
+                {blocker
+                  ? `Set up: ${blocker}`
+                  : 'Current layout matches — check the projector, then mark.'}
+              </p>
+            )}
             {r.snapshot && (
               <p className="mt-1 font-mono text-[11px] text-slate-400">{r.snapshot}</p>
             )}

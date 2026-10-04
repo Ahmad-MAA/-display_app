@@ -7,6 +7,25 @@ import { log } from './log';
 import { lockDownNavigation, loadPage, preloadPath } from './windows';
 
 const MAX_BOUNDS_ATTEMPTS = 3;
+/** Wait for the renderer's resize to settle before cross-checking its viewport. */
+const VIEWPORT_SETTLE_MS = 400;
+
+/**
+ * At fractional scale factors (125%, 150%) Windows rounds window sizes to whole
+ * physical pixels, so a windowed getBounds() can read back 1–2 DIP off and never
+ * converge (seen on real hardware: 1280×721 → 1281×722 at 150%). That is rounding,
+ * not a DPI bug; full screen then snaps to the exact display bounds, which we
+ * verify exactly afterwards.
+ */
+function withinRounding(a: Rect, b: Rect, scaleFactor: number): boolean {
+  const tol = Math.max(1, Math.ceil(scaleFactor));
+  return (
+    Math.abs(a.x - b.x) <= tol &&
+    Math.abs(a.y - b.y) <= tol &&
+    Math.abs(a.width - b.width) <= tol &&
+    Math.abs(a.height - b.height) <= tol
+  );
+}
 const FULLSCREEN_EVENT_TIMEOUT_MS = 1500;
 
 function waitFor(win: BrowserWindow, event: 'enter-full-screen' | 'leave-full-screen') {
@@ -39,6 +58,13 @@ export class OutputWindow {
   private lastBaseProblems: string[] = [];
   private viewportTimer: NodeJS.Timeout | null = null;
   private lastProblemKey = '';
+  /**
+   * True from the moment a display change is noticed until the re-placement finishes.
+   * Viewport reports in that window describe the OLD layout and must not be judged
+   * against the old placement (that produced spurious "wrong DPI" warnings while
+   * the user was changing scale/resolution).
+   */
+  private stale = false;
   private placing: Promise<void> = Promise.resolve();
   private readonly ready: Promise<void>;
 
@@ -68,7 +94,9 @@ export class OutputWindow {
     );
     lockDownNavigation(this.win);
     this.win.webContents.setZoomFactor(1);
-    this.ready = loadPage(this.win, 'output');
+    this.ready = loadPage(this.win, 'output').catch((err: unknown) => {
+      log('error', `Output page failed to load: ${String(err)}`);
+    });
   }
 
   send<K extends OutputEventChannel>(channel: K, payload: OutputEventMap[K]): void {
@@ -85,20 +113,32 @@ export class OutputWindow {
     this.win.hide();
   }
 
-  /** Renderer viewport arrives on every resize; settle before judging (fullscreen transitions). */
+  /** A display change was detected; a re-placement is coming. */
+  markStale(): void {
+    this.stale = true;
+    if (this.viewportTimer) clearTimeout(this.viewportTimer);
+    this.viewportTimer = null;
+  }
+
+  /** Renderer viewport arrives on every resize; it is judged only once placement settles. */
   setViewport(v: OutputViewport): void {
     this.viewport = v;
+    if (!this.stale) this.scheduleViewportCheck();
+  }
+
+  private scheduleViewportCheck(): void {
     if (this.viewportTimer) clearTimeout(this.viewportTimer);
     this.viewportTimer = setTimeout(() => {
-      if (!this.lastBase) return;
-      const report = this.composeReport();
+      this.viewportTimer = null;
+      if (!this.lastBase || this.stale) return;
+      const report = this.composeReport(true);
       const key = report.problems.join('|');
       if (key !== this.lastProblemKey && !report.ok) {
         log('warn', `Output viewport check: ${report.problems.join('; ')}`);
       }
       this.lastProblemKey = key;
       this.onReport(report);
-    }, 300);
+    }, VIEWPORT_SETTLE_MS);
   }
 
   /** Serialized: overlapping display events never interleave two placements. */
@@ -111,26 +151,43 @@ export class OutputWindow {
     return this.placing;
   }
 
-  private setBoundsVerified(target: Rect, phase: string): { attempts: number; actual: Rect } {
+  /** Windowed placement. Returns whether a real (beyond-rounding) mismatch had to be corrected. */
+  private setBoundsVerified(
+    target: Rect,
+    scaleFactor: number,
+    phase: string,
+  ): { attempts: number; actual: Rect; corrected: boolean } {
     let actual = this.win.getBounds();
     let attempts = 0;
+    let corrected = false;
     while (attempts < MAX_BOUNDS_ATTEMPTS) {
       attempts++;
       this.win.setBounds(target);
       actual = this.win.getBounds();
       if (rectEquals(actual, target)) break;
+      if (withinRounding(actual, target, scaleFactor)) {
+        if (attempts === 1) {
+          log(
+            'info',
+            `Windowed bounds ${formatRect(actual)} within scale-${scaleFactor} rounding of ${formatRect(target)} (${phase}); full screen will snap exactly`,
+          );
+        }
+        break;
+      }
+      corrected = true;
       log(
         'warn',
         `DPI/bounds mismatch (${phase}, attempt ${attempts}): expected ${formatRect(target)}, got ${formatRect(actual)}; correcting`,
       );
     }
-    return { attempts, actual };
+    return { attempts, actual, corrected };
   }
 
   private async doPlace(display: Display): Promise<void> {
     await this.ready;
     const win = this.win;
     if (win.isDestroyed()) return;
+    this.stale = true;
     const target = { ...display.bounds };
     const primary = screen.getPrimaryDisplay();
     let corrected = false;
@@ -141,8 +198,8 @@ export class OutputWindow {
     }
 
     // 1) Windowed placement using the target display's DIP bounds (NOT workArea).
-    const first = this.setBoundsVerified(target, 'windowed');
-    if (first.attempts > 1) corrected = true;
+    const first = this.setBoundsVerified(target, display.scaleFactor, 'windowed');
+    if (first.corrected) corrected = true;
 
     // 2) Show without stealing focus from the Control Panel, then go full screen.
     if (!win.isVisible()) win.showInactive();
@@ -161,7 +218,7 @@ export class OutputWindow {
       );
       win.setFullScreen(false);
       await waitFor(win, 'leave-full-screen');
-      this.setBoundsVerified(target, 'retry');
+      this.setBoundsVerified(target, display.scaleFactor, 'retry');
       win.setFullScreen(true);
       await waitFor(win, 'enter-full-screen');
       await delay(50);
@@ -195,22 +252,25 @@ export class OutputWindow {
       mixedDpi: display.scaleFactor !== primary.scaleFactor,
     };
     this.lastBaseProblems = problems;
-    const report = this.composeReport();
+    // Judge bounds now; the renderer viewport is checked once its resize settles.
+    const report = this.composeReport(false);
     this.lastProblemKey = report.problems.join('|');
+    this.stale = false;
     log(
       report.ok ? 'info' : 'error',
       `Output placed on "${report.targetLabel}" ${formatRect(target)} scale ${display.scaleFactor} (primary ${primary.scaleFactor}${report.mixedDpi ? ', MIXED DPI' : ''}): ${report.ok ? 'OK' : report.problems.join('; ')}`,
     );
     this.onReport(report);
+    this.scheduleViewportCheck();
   }
 
   /** Combine main-side bounds checks with what the renderer reports in physical pixels. */
-  private composeReport(): PlacementReport {
+  private composeReport(checkViewport: boolean): PlacementReport {
     if (!this.lastBase) throw new Error('no placement yet');
     const base = this.lastBase;
     const problems = [...this.lastBaseProblems];
     const v = this.viewport;
-    if (v && this.win.isVisible()) {
+    if (checkViewport && v && this.win.isVisible()) {
       if (
         Math.abs(v.innerWidth - base.expected.width) > 1 ||
         Math.abs(v.innerHeight - base.expected.height) > 1

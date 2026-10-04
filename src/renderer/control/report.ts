@@ -17,7 +17,7 @@ export function placementSummary(state: AppState): string {
     )
     .join(' ');
   if (!p) return `${layout} | no placement`;
-  return `${layout} | output ${formatRect(p.actual)} ${p.ok ? 'OK' : 'FAIL: ' + p.problems.join('; ')}${p.corrected ? ' (corrected)' : ''}`;
+  return `${layout} | hotplug-recoveries ${state.hotplugRecoveries} | output ${formatRect(p.actual)} ${p.ok ? 'OK' : 'FAIL: ' + p.problems.join('; ')}${p.corrected ? ' (corrected)' : ''}`;
 }
 
 function placementBlock(p: PlacementReport | null): string {
@@ -48,7 +48,7 @@ export function buildReport(
     )
     .join('\n');
   const checklist = HARDWARE_CHECKS.map((c) => {
-    const r = checks[c.id];
+    const r = checks[c.id] ?? { result: 'untested', snapshot: null };
     const box = r.result === 'pass' ? '[x]' : '[ ]';
     const tag = r.result === 'untested' ? 'untested' : r.result.toUpperCase();
     return `- ${box} ${c.label} — **${tag}**${r.snapshot ? `\n  - \`${r.snapshot}\`` : ''}`;

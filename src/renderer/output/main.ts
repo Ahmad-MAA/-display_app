@@ -30,7 +30,14 @@ function renderPattern(): void {
   const d = current.display;
   const physW = Math.round(window.innerWidth * window.devicePixelRatio);
   const physH = Math.round(window.innerHeight * window.devicePixelRatio);
-  const matches = physW === d.nativeSize.width && physH === d.nativeSize.height;
+  // At fractional scales the DIP bounds are rounded (e.g. 1080 px / 1.5 → 721 DIP), so
+  // allow the same rounding in physical pixels.
+  const tol = Math.max(1, Math.ceil(d.scaleFactor));
+  const matches =
+    Math.abs(physW - d.nativeSize.width) <= tol && Math.abs(physH - d.nativeSize.height) <= tol;
+  const exact =
+    Number.isInteger(d.bounds.width * d.scaleFactor) &&
+    Number.isInteger(d.bounds.height * d.scaleFactor);
 
   for (const c of ['tl', 'tr', 'bl', 'br']) pattern.append(el('div', `corner ${c}`));
   pattern.append(el('div', 'circle'));
@@ -43,7 +50,11 @@ function renderPattern(): void {
       `Display bounds: ${d.bounds.width}×${d.bounds.height} DIP @ (${d.bounds.x}, ${d.bounds.y})`,
     ),
     el('div', '', `Scale factor: ${d.scaleFactor}  ·  ${d.displayFrequency} Hz`),
-    el('div', '', `Expected: ${d.nativeSize.width}×${d.nativeSize.height} px`),
+    el(
+      'div',
+      '',
+      `Expected: ${exact ? '' : '≈ '}${d.nativeSize.width}×${d.nativeSize.height} px (±${tol} px rounding)`,
+    ),
     el(
       'div',
       matches ? 'ok' : 'bad',

@@ -70,4 +70,6 @@ export interface AppState {
   testPattern: boolean;
   contentProtection: ContentProtectionStatus | null;
   placement: PlacementReport | null;
+  /** Times this session the projector was unplugged and Output was restored correctly on replug. */
+  hotplugRecoveries: number;
 }

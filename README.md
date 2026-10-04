@@ -39,9 +39,9 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 2. In the Control Panel, turn on **Test pattern**. On the projector, check that:
    - the red border and all four yellow corners are visible;
    - the circle is round;
-   - the "Rendering" line is green: `DIP × DPR` equals the display's native pixel size.
+   - the "Rendering" line is green: `DIP × DPR` equals the display's native pixel size (within 1–2 px rounding at 125%/150%).
 3. The **Output placement** card should say "Covers display exactly". Every mismatch, and every correction the app made, is logged.
-4. Repeat for each item in the **Step 1 hardware gate** card and mark Pass/Fail. Marking an item records a snapshot of the current display layout and placement.
+4. Repeat for each item in the **Step 1 hardware gate** card and mark Pass/Fail. **Pass only becomes clickable while the current layout actually demonstrates that item** (e.g. the secondary really is left of the primary, and placement is OK). The amber hint under each item says what to change. Marking records a snapshot of the layout as evidence. The unplug/replug item unlocks once the app has seen the projector removed and the Output restored.
    - Primary at 125% or 150%, secondary at 100%, and the reverse.
    - Secondary left of, right of, and above the primary (Settings → System → Display, drag the monitors).
    - Projector at a non-native resolution (e.g. 1024×768 or 1280×800).

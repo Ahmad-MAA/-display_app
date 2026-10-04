@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, type Display } from 'electron';
+import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
 import { findDisplay, listDisplays, pickTargetDisplay } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
@@ -11,6 +11,8 @@ let output: OutputWindow | null = null;
 let targetDisplayId: number | null = null;
 let testPattern = false;
 let lastPlacement: PlacementReport | null = null;
+let awaitingReplug = false;
+let hotplugRecoveries = 0;
 
 const controlWc = () => (control && !control.isDestroyed() ? control.webContents : null);
 const outputWc = () => (output && !output.win.isDestroyed() ? output.win.webContents : null);
@@ -24,6 +26,7 @@ function state(): AppState {
     testPattern,
     contentProtection: output?.contentProtection ?? null,
     placement: lastPlacement,
+    hotplugRecoveries,
   };
 }
 
@@ -60,6 +63,11 @@ async function placeOutput(reason: string): Promise<void> {
   targetDisplayId = target.id;
   log('info', `Placing Output on display ${target.id} "${target.label || 'unnamed'}" (${reason})`);
   await output.placeOn(target);
+  if (awaitingReplug && lastPlacement?.ok && lastPlacement.targetDisplayId === target.id) {
+    awaitingReplug = false;
+    hotplugRecoveries++;
+    log('info', `Projector reconnected; Output restored on "${target.label || target.id}"`);
+  }
   pushTestPattern(target);
   pushState();
 }
@@ -67,6 +75,7 @@ async function placeOutput(reason: string): Promise<void> {
 let displayTimer: NodeJS.Timeout | null = null;
 /** Windows fires bursts of display events (esp. on hot-plug); coalesce them. */
 function schedulePlacement(reason: string): void {
+  output?.markStale();
   if (displayTimer) clearTimeout(displayTimer);
   displayTimer = setTimeout(() => {
     displayTimer = null;
@@ -87,6 +96,7 @@ function watchDisplays(): void {
     if (d.id === targetDisplayId) {
       // Hide immediately; don't wait for the debounce.
       output?.hide();
+      awaitingReplug = true;
       log('warn', 'Projector display was unplugged mid-session; Output hidden.');
       pushState();
     }
@@ -129,7 +139,10 @@ function createControlWindow(): BrowserWindow {
     control = null;
     app.quit();
   });
-  void loadPage(win, 'control');
+  loadPage(win, 'control').catch((err: unknown) => {
+    log('error', `Control Panel failed to load: ${String(err)}`);
+    dialog.showErrorBox('ProjectorDesk', `The Control Panel failed to load:\n${String(err)}`);
+  });
   return win;
 }
 
