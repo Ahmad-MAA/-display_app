@@ -1,6 +1,7 @@
 /** Shapes of the APIs each preload exposes via contextBridge. Pure types: no Electron imports. */
 import type { AppState, ExtendResult, LogEntry, OutputViewport } from './diagnostics';
-import type { TestPatternInfo } from './ipc';
+import type { OutputControls, OutputStatsReport, TestPatternInfo } from './ipc';
+import type { PresenterAction } from './controls';
 import type { CropRect, OutputDisplay } from './geometry';
 import type { FillMode, SourceDescriptor } from './outputEngine';
 import type { ProjectResult, SourceStatus } from './projection';
@@ -22,12 +23,17 @@ export interface ControlApi {
   setFollowFullscreen(on: boolean): Promise<void>;
   setFillMode(mode: FillMode): Promise<void>;
   setCrop(crop: CropRect | null): Promise<void>;
+  action(action: PresenterAction): Promise<void>;
 }
 
 export interface OutputApi {
   onTestPattern(cb: (info: TestPatternInfo | null) => void): () => void;
   reportViewport(v: OutputViewport): void;
-  onSetSource(cb: (req: { token: number; source: SourceDescriptor | null }) => void): () => void;
+  onSetSource(
+    cb: (req: { token: number; source: SourceDescriptor | null; cursor: boolean }) => void,
+  ): () => void;
   reportSourceStatus(status: SourceStatus): void;
   onDisplay(cb: (d: OutputDisplay) => void): () => void;
+  onControls(cb: (c: OutputControls) => void): () => void;
+  reportStats(stats: OutputStatsReport): void;
 }

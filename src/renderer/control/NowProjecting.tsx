@@ -2,7 +2,9 @@ import { useState } from 'react';
 import type { OutputDisplay } from '@shared/geometry';
 import type { FillMode } from '@shared/outputEngine';
 import type { ProjectionInfo } from '@shared/projection';
+import type { AppState } from '@shared/diagnostics';
 import { CropEditor, CropOutline, useContentBox, useProjectedStream } from './CropEditor';
+import { PresenterToolbar } from './PresenterToolbar';
 
 const api = window.projectorDesk;
 
@@ -108,11 +110,13 @@ export function NowProjecting({
   notice,
   followFullscreen,
   display,
+  state,
 }: {
   projection: ProjectionInfo;
   notice: { tone: 'warn' | 'bad'; text: string } | null;
   followFullscreen: boolean;
   display: OutputDisplay;
+  state: AppState;
 }) {
   const p = projection;
   const [cropping, setCropping] = useState(false);
@@ -150,6 +154,7 @@ export function NowProjecting({
           setCropping(true);
         }}
       />
+      <PresenterToolbar state={state} />
       {cropping && (
         <CropEditor
           token={p.token}

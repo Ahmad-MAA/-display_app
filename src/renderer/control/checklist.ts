@@ -29,6 +29,51 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'helper-running',
+    label:
+      'Window helper fix: NO amber “Window helper unavailable” banner; process names are back in the Windows tab',
+    requires: (_l, s) => (s.windowHelper.reason ? `helper: ${s.windowHelper.reason}` : null),
+  },
+  {
+    id: 'step6-blank-freeze',
+    label:
+      'Step 6: B blanks (black, preview keeps moving), B again restores; F freezes the picture, F again resumes',
+    requires: (_l, s) => (s.projection.state === 'live' ? null : 'project something first'),
+  },
+  {
+    id: 'step6-global',
+    label:
+      'Step 6: with WMP (or a video) in its own full screen, Ctrl+Alt+PgDn / PgUp switch the projected source and WMP stays full screen',
+    requires: (_l, s) =>
+      s.hotkeys.length > 0 && s.hotkeys.every((h) => h.registered)
+        ? null
+        : 'some global hotkeys are taken by another app (see Diagnostics → Global hotkeys)',
+  },
+  {
+    id: 'step6-stats',
+    label:
+      'Step 6: S shows the stats overlay on the projector (fps, dropped, latency); Now projecting shows the same line',
+    requires: (_l, s) => (s.stats ? null : 'project something live first'),
+  },
+  {
+    id: 'step6-cursor',
+    label:
+      'Step 6: C hides the mouse cursor on the projector (or the panel says this capture ignored it); C again shows it',
+    requires: () => null,
+  },
+  {
+    id: 'step6-hide',
+    label:
+      'Step 6: Esc in the Control Panel hides the Output (desktop shows on projector) and Esc again brings it back; M cycles Fit/Fill/Stretch',
+    requires: () => null,
+  },
+  {
+    id: 'covering-warning-retest',
+    label:
+      'Covering warning (re-test): WPS slide show on Monitor 2 with Presenter View → red banner appears within ~2 s; ends → clears',
+    requires: () => null,
+  },
+  {
     id: 'fill-modes',
     label:
       'Step 5: Fit / Fill / Stretch on a source whose shape differs from the projector: Fit = black bars, Fill = edges trimmed, Stretch = distorted to fill',

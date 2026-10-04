@@ -52,6 +52,8 @@ export interface SourceStatus {
   width: number | null;
   height: number | null;
   blank: boolean;
+  /** track.getSettings().cursor when the browser reports it ('always' | 'motion' | 'never'). */
+  cursor: string | null;
 }
 
 export interface ProjectResult {

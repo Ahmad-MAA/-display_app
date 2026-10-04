@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, screen, type Display } from 'electron';
 import type { AppState, PlacementReport } from '@shared/diagnostics';
-import { DEFAULT_DISPLAY, FILL_MODES } from '@shared/geometry';
+import { DEFAULT_CONTROLS, type HotkeyStatus, type PresenterAction } from '@shared/controls';
+import { DEFAULT_DISPLAY, FILL_MODES, nextFillMode } from '@shared/geometry';
 import { IDLE_PROJECTION, type ProjectResult } from '@shared/projection';
 import { resolveTarget } from '@shared/targeting';
 import { extendDisplays } from './displaySwitch';
@@ -9,6 +10,8 @@ import { handle, onOutput, sendToControl } from './ipc';
 import { getLogFilePath, getLogs, log, onLog } from './log';
 import { ElectronOutputEngine } from './electronOutputEngine';
 import { CoverWatcher } from './coverWatcher';
+import { registerHotkeys, unregisterHotkeys } from './hotkeys';
+import { recentSessions, recordSession } from './sessionLog';
 import { FullscreenFollower } from './fullscreenFollower';
 import { OutputWindow } from './outputWindow';
 import { hwndOf, ownHwnds, SourceService } from './sources';
@@ -21,6 +24,9 @@ let sources: SourceService | null = null;
 let engine: ElectronOutputEngine | null = null;
 let follower: FullscreenFollower | null = null;
 let coverWatcher: CoverWatcher | null = null;
+let hotkeys: HotkeyStatus[] = [];
+/** Emergency hide (Esc / Ctrl+Alt+H): keep the Output hidden until shown again. */
+let outputHiddenByUser = false;
 let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
 let preferredDisplayId: number | null = null;
@@ -57,6 +63,12 @@ function state(): AppState {
       supported: process.platform === 'win32',
       reason: windowHelper?.unavailableReason ?? null,
     },
+    controls: engine?.currentControls ?? DEFAULT_CONTROLS,
+    stats: engine?.currentStats ?? null,
+    cursorHideSupported: engine?.cursorHide ?? null,
+    hotkeys,
+    outputHiddenByUser,
+    sessions: recentSessions(),
   };
 }
 
@@ -109,6 +121,11 @@ async function placeOutput(reason: string): Promise<void> {
   }
   if (lostDisplayId === target.id) lostDisplayId = null;
   targetDisplayId = target.id;
+  if (outputHiddenByUser) {
+    output.hide();
+    pushState();
+    return;
+  }
   log('info', `Placing Output on display ${target.id} "${target.label || 'unnamed'}" (${reason})`);
   await output.placeOn(target);
   if (awaitingReplug && lastPlacement?.ok && lastPlacement.targetDisplayId === target.id) {
@@ -249,6 +266,70 @@ function returnFocusToControl(): void {
   setTimeout(refocus, 150);
 }
 
+/** Next / previous source in the grid's order (windows, then screens). */
+async function stepSource(dir: 1 | -1): Promise<void> {
+  if (!sources || !engine) return;
+  // The list only auto-refreshes while the panel is focused; a hotkey from another app needs fresh data.
+  const list = (await sources.refresh()).sources.filter(
+    (x) => !(x.isProjectorScreen && !output?.contentProtection.ok),
+  );
+  const ordered = [
+    ...list.filter((x) => x.descriptor.kind === 'window'),
+    ...list.filter((x) => x.descriptor.kind === 'screen'),
+  ];
+  if (ordered.length === 0) return;
+  const cur = engine.current.source?.sourceId;
+  const i = ordered.findIndex((x) => x.descriptor.sourceId === cur);
+  const next = ordered[i < 0 ? 0 : (i + dir + ordered.length) % ordered.length];
+  if (next) await project(next.descriptor.sourceId);
+}
+
+function setOutputHidden(hidden: boolean): void {
+  outputHiddenByUser = hidden;
+  log(
+    hidden ? 'warn' : 'info',
+    hidden ? 'Output hidden by presenter (emergency hide)' : 'Output shown again',
+  );
+  if (hidden) {
+    output?.hide();
+    pushState();
+  } else {
+    void placeOutput('presenter un-hid the Output');
+  }
+}
+
+/** One entry point for buttons, Control Panel keys and global hotkeys. */
+function runAction(a: PresenterAction): void {
+  if (!engine) return;
+  const c = engine.currentControls;
+  switch (a) {
+    case 'blank':
+      engine.blank(!c.blank);
+      break;
+    case 'freeze':
+      engine.freeze(!c.freeze);
+      break;
+    case 'cursor':
+      engine.setCursor(!c.cursor);
+      break;
+    case 'stats':
+      engine.setStatsOverlay(!c.statsOverlay);
+      break;
+    case 'fill-cycle':
+      engine.setFillMode(nextFillMode(engine.currentDisplay.fillMode));
+      break;
+    case 'next':
+      void stepSource(1);
+      break;
+    case 'prev':
+      void stepSource(-1);
+      break;
+    case 'hide-output':
+      setOutputHidden(!outputHiddenByUser);
+      break;
+  }
+}
+
 /** Control Panel picked a source (only its id crosses IPC). */
 async function project(sourceId: string | null): Promise<ProjectResult> {
   if (!engine || !sources) return { ok: false, message: 'Not ready yet.' };
@@ -342,6 +423,12 @@ function registerIpc(): void {
   handle('output:set-crop', controlWc, (crop) => {
     engine?.setCrop(crop);
   });
+  handle('output:action', controlWc, (a) => {
+    runAction(a);
+  });
+  onOutput('output:stats', outputWc, (r) => {
+    engine?.handleStats(r);
+  });
   handle('output:set-follow', controlWc, (on) => {
     follower?.setEnabled(on);
     pushState();
@@ -391,12 +478,19 @@ if (!app.requestSingleInstanceLock()) {
       pushState();
     });
     windowHelper = new WindowHelper({ scriptDir: app.getPath('userData') });
+    hotkeys = registerHotkeys(runAction);
     windowHelper.onUnavailable = () => {
       pushState();
     };
     engine = new ElectronOutputEngine(output, controlWc, () => {
       pushState();
     });
+    engine.refreshRate = () =>
+      (targetDisplayId !== null ? findDisplay(targetDisplayId)?.displayFrequency : undefined) || 60;
+    engine.onSession = (s) => {
+      recordSession(s);
+      pushState();
+    };
     follower = new FullscreenFollower(windowHelper, engine, (monitor) => {
       // Helper rects are physical pixels; Electron displays are DIPs.
       const dip = process.platform === 'win32' ? screen.screenToDipRect(null, monitor) : monitor;
@@ -437,7 +531,12 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
   });
 
+  app.on('will-quit', () => {
+    unregisterHotkeys();
+  });
+
   app.on('before-quit', () => {
+    engine?.shutdown();
     sources?.dispose();
     coverWatcher?.dispose();
     windowHelper?.dispose();

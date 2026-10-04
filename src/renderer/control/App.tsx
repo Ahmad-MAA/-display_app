@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AppState, ExtendResult, PlacementReport } from '@shared/diagnostics';
+import { localAction } from '@shared/controls';
 import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@shared/displays';
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
@@ -249,6 +250,24 @@ function DisplayBanners({ state }: { state: AppState }) {
           {result.message}
         </div>
       )}
+      {state.outputHiddenByUser && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-rose-700 bg-rose-950/60 p-3 text-sm text-rose-200"
+        >
+          <span className="flex-1">
+            <strong>Output hidden.</strong> The projector shows the desktop behind it. Press Esc
+            here or Ctrl+Alt+H anywhere to bring it back.
+          </span>
+          <Button onClick={() => void api.action('hide-output')}>Show Output</Button>
+        </div>
+      )}
+      {state.displays.some((d) => isHdrDisplay(d)) && (
+        <div className="rounded-md border border-sky-800 bg-sky-950/50 p-3 text-sm text-sky-200">
+          <strong>HDR source/display detected.</strong> Phase 1 output is SDR (tone-mapped). Native
+          engine required for HDR passthrough.
+        </div>
+      )}
       {state.windowHelper.supported && state.windowHelper.reason && (
         <div
           role="alert"
@@ -436,6 +455,24 @@ export function App() {
     }
   };
 
+  // Presenter keys while the Control Panel is focused (global Ctrl+Alt hotkeys work everywhere).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'))
+        return;
+      if (document.querySelector('[role="dialog"]')) return; // crop editor owns its keys
+      const a = localAction(e);
+      if (!a) return;
+      e.preventDefault();
+      void api.action(a);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
   useEffect(() => {
     if (!copied) return;
     const t = setTimeout(() => {
@@ -534,6 +571,7 @@ export function App() {
                   notice={notice}
                   followFullscreen={state.followFullscreen}
                   display={state.display}
+                  state={state}
                 />
               </Card>
               <Card title="Projector">
@@ -554,6 +592,46 @@ export function App() {
                 right={<span className="text-xs text-slate-500">saved locally</span>}
               >
                 <Checklist state={state} checks={checks} setChecks={setChecks} />
+              </Card>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card title="Global hotkeys">
+                <ul className="space-y-1 text-xs">
+                  {state.hotkeys.map((h) => (
+                    <li key={h.action} className="flex justify-between gap-2">
+                      <span className="font-mono">
+                        {h.accelerator.replace('CommandOrControl', 'Ctrl')}
+                      </span>
+                      <span className={h.registered ? 'text-emerald-300' : 'text-rose-300'}>
+                        {h.action} · {h.registered ? 'active' : 'taken by another app'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+              <Card title="Recent sessions (Phase 2 evidence)">
+                {state.sessions.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    A session is summarized when a projection ends. Saved to logs/sessions.jsonl.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-xs">
+                    {state.sessions.map((s) => (
+                      <li
+                        key={s.startedAt}
+                        className={s.needsNativeEngine ? 'text-amber-300' : 'text-slate-300'}
+                      >
+                        {s.source.slice(0, 40)} · {s.durationS}s · {s.dropPercent.toFixed(1)}%
+                        dropped ·{' '}
+                        {s.medianLatencyMs === null
+                          ? 'latency n/a'
+                          : `${s.medianLatencyMs.toFixed(1)} ms`}
+                        {s.needsNativeEngine && ` · needs native engine (${s.reasons.join('; ')})`}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Card>
             </div>
 

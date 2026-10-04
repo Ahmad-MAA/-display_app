@@ -1,7 +1,10 @@
 import type { DisplayInfo, Rect } from './displays';
+import type { HotkeyStatus, PresenterControls } from './controls';
 import type { CoveringWindow } from './covering';
 import type { OutputDisplay } from './geometry';
+import type { EngineStats } from './outputEngine';
 import type { ProjectionInfo } from './projection';
+import type { SessionSummary } from './stats';
 
 export interface ContentProtectionStatus {
   platform: string;
@@ -101,4 +104,17 @@ export interface AppState {
    * screen, covering warning). `reason` is set when it isn't working.
    */
   windowHelper: { supported: boolean; reason: string | null };
+  controls: PresenterControls;
+  /** null until the Output reports stats for the current capture. */
+  stats: EngineStats | null;
+  /**
+   * Whether hiding the cursor actually took effect: null = unknown/not requested,
+   * false = the capture ignored it (Chromium limitation; the native engine can do it).
+   */
+  cursorHideSupported: boolean | null;
+  hotkeys: HotkeyStatus[];
+  /** Emergency hide (Esc / Ctrl+Alt+H): Output window hidden until shown again. */
+  outputHiddenByUser: boolean;
+  /** Most recent projection sessions, newest first. */
+  sessions: SessionSummary[];
 }

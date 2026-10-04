@@ -39,6 +39,7 @@ function report(s: Partial<SourceStatus> & Pick<SourceStatus, 'token' | 'state'>
     width: null,
     height: null,
     blank: false,
+    cursor: null,
     ...s,
   });
 }
@@ -84,7 +85,7 @@ function frameIsBlank(): boolean {
 
 function liveStatus(token: number, blank: boolean): void {
   const track = stream?.getVideoTracks()[0];
-  const settings = track?.getSettings();
+  const settings = track?.getSettings() as (MediaTrackSettings & { cursor?: string }) | undefined;
   lastBlank = blank;
   report({
     token,
@@ -92,10 +93,15 @@ function liveStatus(token: number, blank: boolean): void {
     blank,
     width: settings?.width ?? video.videoWidth,
     height: settings?.height ?? video.videoHeight,
+    cursor: settings?.cursor ?? null,
   });
 }
 
-async function switchTo(token: number, source: SourceDescriptor | null): Promise<void> {
+async function switchTo(
+  token: number,
+  source: SourceDescriptor | null,
+  cursor: boolean,
+): Promise<void> {
   if (token !== latestToken) return; // superseded before we even started
   await fadeOut();
   stopStream();
@@ -106,8 +112,10 @@ async function switchTo(token: number, source: SourceDescriptor | null): Promise
 
   let s: MediaStream;
   try {
+    // `cursor` is a display-capture constraint ('always' | 'never'); not in the TS DOM lib.
+    const constraints = { frameRate: { ideal: 60, max: 60 }, cursor: cursor ? 'always' : 'never' };
     s = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 60, max: 60 } },
+      video: constraints as MediaTrackConstraints,
       audio: false,
     });
   } catch (err) {
@@ -144,12 +152,14 @@ async function switchTo(token: number, source: SourceDescriptor | null): Promise
   if (token !== latestToken || stream !== s) return;
   fadeIn();
   liveStatus(token, frameIsBlank());
+  window.dispatchEvent(new CustomEvent('pd:capture-live', { detail: { token } }));
 }
 
-api.onSetSource(({ token, source }) => {
+api.onSetSource(({ token, source, cursor }) => {
   latestToken = token;
+  window.dispatchEvent(new CustomEvent('pd:capture-stop'));
   chain = chain
-    .then(() => switchTo(token, source))
+    .then(() => switchTo(token, source, cursor))
     .catch((err: unknown) => {
       report({ token, state: 'error', errorName: null, message: String(err) });
     });

@@ -7,8 +7,9 @@ A Windows presenter tool with two windows:
 
 Phase 1 is Electron + TypeScript + React/Tailwind. Phase 2, a native Windows.Graphics.Capture engine, is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Status: step 5 (fill modes & crop) — awaiting hardware check.** Steps 1–4 and Follow full
-> screen passed on hardware ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
+> **Status: step 6 (presenter controls, hotkeys, stats) — awaiting hardware check.** Steps 1–5
+> passed on hardware except the covering warning, which failed because the window helper didn't
+> start (fixed; re-test) ([`docs/HARDWARE_GATE.md`](docs/HARDWARE_GATE.md)).
 
 ## Setup
 
@@ -62,6 +63,33 @@ Run this with a real projector or second monitor. Display-bounds bugs only show 
 5. Click **Copy report** and paste the Markdown report back into the task.
 
 The log file is at `%APPDATA%\ProjectorDesk\logs\projectordesk.log`.
+
+## Presenter controls and hotkeys
+
+| Action                                        | In the Control Panel | From any app (global)    |
+| --------------------------------------------- | -------------------- | ------------------------ |
+| Blank: projector black, capture keeps running | **B**                | **Ctrl+Alt+B**           |
+| Freeze the current frame                      | **F**                | **Ctrl+Alt+F**           |
+| Fill mode Fit → Fill → Stretch                | **M**                | **Ctrl+Alt+M**           |
+| Stats overlay on the projector                | **S**                | **Ctrl+Alt+S**           |
+| Show / hide the mouse cursor                  | **C**                | **Ctrl+Alt+C**           |
+| Next / previous source                        | **Ctrl+→ / Ctrl+←**  | **Ctrl+Alt+PgDn / PgUp** |
+| Emergency hide / show the Output              | **Esc**              | **Ctrl+Alt+H**           |
+
+The same toggles are buttons in _Now projecting_.
+
+- **Global hotkeys don't take focus.** A video player stays in its own full screen while you
+  switch sources (Windows Media Player leaves full screen when you click the Control Panel).
+- **Why Ctrl+Alt:** a global plain "B" would steal that letter from every app you type in.
+  **Why PgUp/PgDn:** many Intel graphics drivers rotate the screen on Ctrl+Alt+Arrow. Hotkeys
+  become configurable in step 7. If another app already owns a combination, Diagnostics →
+  Global hotkeys says so and the button / panel key still works.
+- **Hide cursor**: Chromium may ignore it for some sources; the panel tells you when it did.
+- **Stats**: delivered fps, dropped frames, capture-to-display latency and processing time,
+  measured on the Output. Every projection is summarized in `logs/sessions.jsonl`; sessions with
+  median latency above one frame or more than 2% dropped frames are flagged as evidence for the
+  native engine (Diagnostics → Recent sessions).
+- **HDR**: if any display reports HDR, a banner explains that Phase 1 output is SDR.
 
 ## Fill modes and crop
 

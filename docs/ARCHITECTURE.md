@@ -102,6 +102,36 @@ Output window (`src/renderer/output/display.ts`). Geometry lives in `src/shared/
 - The crop editor (Control Panel) uses its own ≤1280×720, 10 fps capture of the same source and
   maps pointer positions through the video's contain-fitted content box.
 
+## Presenter controls, hotkeys, stats (step 6)
+
+- One dispatcher, `runAction()` in `src/main/index.ts`, serves buttons (`output:action`),
+  Control Panel keys (`localAction()` in `src/shared/controls.ts`) and global hotkeys
+  (`src/main/hotkeys.ts`, `globalShortcut`, registered at startup, unregistered on `will-quit`).
+  Registration failures are reported per hotkey in AppState.
+- Engine: `blank()` and `freeze()` and the stats overlay are `output:controls` messages (blank =
+  black overlay above `#stage`, capture continues; freeze = `video.pause()`, reset on every new
+  capture). `setCursor()` is a capture constraint (`cursor: 'always' | 'never'`), so it restarts
+  the capture; the Output reports `getSettings().cursor` so the panel can say when Chromium
+  ignored it.
+- Stats (`src/renderer/output/controls.ts`, math in `src/shared/stats.ts`): per frame from
+  `requestVideoFrameCallback`; dropped = gaps in `presentedFrames`; latency =
+  `expectedDisplayTime − captureTime`; processing = `processingDuration` (fallback
+  `presentationTime − captureTime`). Reported to main once a second with the capture token.
+- Sessions: the engine summarizes each capture when it ends; `evaluateSession()` flags median
+  latency > one frame at the projector's refresh rate or > 2% drops. `src/main/sessionLog.ts`
+  appends to `userData/logs/sessions.jsonl` and keeps the last 10 for the Diagnostics tab.
+- Next/previous source re-enumerates first (the list only auto-refreshes while the panel is
+  focused) and walks windows then screens in grid order.
+- Emergency hide hides the Output window; placement keeps tracking the target but won't show it
+  until un-hidden.
+
+## Window helper launch
+
+The helper script is written to `userData/window-helper.ps1` and started with a short
+`-EncodedCommand` bootstrap that runs it as a ScriptBlock. Passing the whole script inline broke
+once it grew past Windows' 32,767-character command line (`spawn ENAMETOOLONG`), which silently
+disabled every helper feature; failures now surface as a Control Panel banner and in Copy report.
+
 ## Covering windows
 
 `CoverWatcher` polls the window helper's `covering` op once a second while the Output is visible:

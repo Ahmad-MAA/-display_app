@@ -29,6 +29,10 @@ const api: OutputApi = {
   },
   onSetSource: (cb) => on('output:set-source', cb),
   onDisplay: (cb) => on('output:display', cb),
+  onControls: (cb) => on('output:controls', cb),
+  reportStats: (stats) => {
+    send('output:stats', stats);
+  },
   reportSourceStatus: (status) => {
     send('output:source-status', status);
   },

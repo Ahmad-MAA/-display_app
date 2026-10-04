@@ -1,5 +1,6 @@
 import './capture';
 import './display';
+import './controls';
 import type { TestPatternInfo } from '@shared/ipc';
 
 const api = window.projectorOutput;

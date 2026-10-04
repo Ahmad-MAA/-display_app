@@ -5,7 +5,9 @@ import {
   type CropRect,
   type OutputDisplay,
 } from '@shared/geometry';
-import type { FillMode, SourceDescriptor } from '@shared/outputEngine';
+import { DEFAULT_CONTROLS, type PresenterControls } from '@shared/controls';
+import type { EngineStats, FillMode, SourceDescriptor } from '@shared/outputEngine';
+import { evaluateSession, type SessionSummary } from '@shared/stats';
 import {
   describeCaptureError,
   IDLE_PROJECTION,
@@ -14,6 +16,7 @@ import {
   type SourceStatus,
 } from '@shared/projection';
 import { log } from './log';
+import type { OutputStatsReport } from '@shared/ipc';
 import type { OutputWindow } from './outputWindow';
 
 export type FollowProblem = 'error' | 'blank' | 'ended';
@@ -36,6 +39,21 @@ export class ElectronOutputEngine {
   private effective: SourceDescriptor | null = null;
   private token = 0;
   private display: OutputDisplay = DEFAULT_DISPLAY;
+  private controls: PresenterControls = DEFAULT_CONTROLS;
+  private stats: EngineStats | null = null;
+  private cursorHideSupported: boolean | null = null;
+  /** Projection session being measured (one per capture token). */
+  private session: {
+    token: number;
+    startedAt: number;
+    source: SourceDescriptor;
+    last: EngineStats | null;
+    latencies: number[];
+  } | null = null;
+  /** Called with each finished session (logged by main; Phase 2 evidence). */
+  onSession: ((s: SessionSummary) => void) | null = null;
+  /** Refresh rate of the projector display, for stats and the Phase 2 verdict. */
+  refreshRate: () => number = () => 60;
   /** Set by the full-screen follower: told when a followed capture fails. */
   onFollowProblem: ((p: FollowProblem) => void) | null = null;
 
@@ -53,6 +71,117 @@ export class ElectronOutputEngine {
 
   get currentDisplay(): OutputDisplay {
     return this.display;
+  }
+
+  get currentControls(): PresenterControls {
+    return this.controls;
+  }
+
+  get currentStats(): EngineStats | null {
+    return this.stats;
+  }
+
+  get cursorHide(): boolean | null {
+    return this.cursorHideSupported;
+  }
+
+  private sendControls(): void {
+    const { blank, freeze, statsOverlay } = this.controls;
+    this.output.send('output:controls', {
+      blank,
+      freeze,
+      statsOverlay,
+      refreshRate: this.refreshRate(),
+    });
+  }
+
+  private applyControls(c: PresenterControls): void {
+    this.controls = c;
+    this.sendControls();
+    this.onChange(this.projection);
+  }
+
+  /** Output goes black; capture keeps running underneath. */
+  blank(on: boolean): void {
+    log('info', `Blank ${on ? 'on' : 'off'}`);
+    this.applyControls({ ...this.controls, blank: on });
+  }
+
+  /** Hold the current frame. */
+  freeze(on: boolean): void {
+    log('info', `Freeze ${on ? 'on' : 'off'}`);
+    this.applyControls({ ...this.controls, freeze: on });
+  }
+
+  setStatsOverlay(on: boolean): void {
+    this.applyControls({ ...this.controls, statsOverlay: on });
+  }
+
+  /** Cursor capture is a getDisplayMedia constraint, so changing it restarts the capture. */
+  setCursor(on: boolean): void {
+    if (on === this.controls.cursor) return;
+    log('info', `Cursor ${on ? 'shown' : 'hidden'}`);
+    this.controls = { ...this.controls, cursor: on };
+    this.cursorHideSupported = null;
+    if (this.effective) {
+      this.startCapture(this.effective);
+      this.set({ ...this.projection, state: 'starting', token: this.token });
+    } else {
+      this.onChange(this.projection);
+    }
+  }
+
+  /** Resend everything the Output needs (e.g. after it was re-placed or reloaded). */
+  resync(): void {
+    this.output.send('output:display', this.display);
+    this.sendControls();
+  }
+
+  /** Stats from the Output for the current capture (once per second). */
+  handleStats(r: OutputStatsReport): void {
+    if (r.token !== this.token) return;
+    const stats: EngineStats = {
+      deliveredFps: r.deliveredFps,
+      droppedFrames: r.droppedFrames,
+      totalFrames: r.totalFrames,
+      medianLatencyMs: r.medianLatencyMs,
+      medianProcessingMs: r.medianProcessingMs,
+      sourceWidth: r.sourceWidth,
+      sourceHeight: r.sourceHeight,
+      refreshRate: r.refreshRate,
+    };
+    this.stats = stats;
+    if (this.session?.token === r.token) {
+      this.session.last = stats;
+      if (stats.medianLatencyMs !== null) this.session.latencies.push(stats.medianLatencyMs);
+    }
+    this.onChange(this.projection);
+  }
+
+  private endSession(): void {
+    const s = this.session;
+    this.session = null;
+    if (!s?.last || s.last.totalFrames === 0) return;
+    const hz = this.refreshRate();
+    const sorted = [...s.latencies].sort((a, b) => a - b);
+    const medianLatencyMs = sorted.length ? (sorted[Math.floor(sorted.length / 2)] ?? null) : null;
+    const frames = s.last.totalFrames - s.last.droppedFrames;
+    const verdict = evaluateSession(frames, s.last.droppedFrames, medianLatencyMs, hz);
+    const ended = Date.now();
+    this.onSession?.({
+      startedAt: new Date(s.startedAt).toISOString(),
+      endedAt: new Date(ended).toISOString(),
+      durationS: Math.round((ended - s.startedAt) / 1000),
+      source: s.source.title,
+      sourceKind: s.source.kind,
+      refreshRate: hz,
+      frames,
+      droppedFrames: s.last.droppedFrames,
+      dropPercent: verdict.dropPercent,
+      medianLatencyMs,
+      needsNativeEngine: verdict.needsNativeEngine,
+      reasons: verdict.reasons,
+    });
   }
 
   private applyDisplay(d: OutputDisplay): void {
@@ -124,9 +253,34 @@ export class ElectronOutputEngine {
   }
 
   private startCapture(source: SourceDescriptor | null): void {
+    this.endSession();
     this.effective = source;
     this.token++;
-    this.output.send('output:set-source', { token: this.token, source });
+    this.stats = null;
+    if (source) {
+      this.session = {
+        token: this.token,
+        startedAt: Date.now(),
+        source,
+        last: null,
+        latencies: [],
+      };
+    }
+    // Freezing belongs to one picture; a new capture always starts live.
+    if (this.controls.freeze) {
+      this.controls = { ...this.controls, freeze: false };
+      this.sendControls();
+    }
+    this.output.send('output:set-source', {
+      token: this.token,
+      source,
+      cursor: this.controls.cursor,
+    });
+  }
+
+  /** End the current session (app quitting). */
+  shutdown(): void {
+    this.endSession();
   }
 
   /** A minimized window is being restored before capture starts. */
@@ -217,6 +371,16 @@ export class ElectronOutputEngine {
 
     switch (s.state) {
       case 'live':
+        if (!this.controls.cursor) {
+          // Chromium may ignore cursor: 'never' for some sources; tell the presenter.
+          const hidden = s.cursor === 'never' ? true : s.cursor === null ? null : false;
+          if (hidden !== this.cursorHideSupported) {
+            this.cursorHideSupported = hidden;
+            if (hidden === false) {
+              log('warn', `Cursor hiding not honored by this capture (cursor: ${s.cursor ?? '?'})`);
+            }
+          }
+        }
         if (this.projection.state !== 'live' || this.projection.blank !== s.blank) {
           log(
             s.blank ? 'warn' : 'info',

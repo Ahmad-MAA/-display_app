@@ -39,6 +39,39 @@ body {
   object-fit: fill;
 }
 
+/* Blank: black above the picture, capture keeps running underneath. */
+#blank {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms linear;
+}
+#blank.on {
+  opacity: 1;
+}
+
+/* Stats overlay (hotkey S). */
+#stats {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #9fe870;
+  font:
+    13px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  border-radius: 6px;
+  z-index: 10;
+}
+#stats[hidden] {
+  display: none;
+}
+
 /* With a crop, the canvas (drawn per video frame) sits on top of the video. */
 #crop[hidden] {
   display: none;
