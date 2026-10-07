@@ -166,6 +166,8 @@ Hardware (2026-10-04): installer installed, started from the Start menu, project
 uninstalled → PASS. Crop editor → PASS. VLC follow full screen → PASS. Portable exe and,
 in a later run, the installed app → **blocked by Smart App Control** ("publisher couldn't be
 verified", no Run anyway): a code-signing issue, not an app bug. Workaround until signed:
-`npm run dev`. Documented in the README (Install, Code signing).
+`npm run dev`. Documented in the README (Install, Code signing). Update (2026-10-07): Smart App
+Control later cleared the installed 0.1.0 build on that PC; new builds and new executables may
+still be blocked.
 
 Phase 1 complete.

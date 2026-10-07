@@ -333,3 +333,7 @@ second; three missed → main treats the engine as crashed.
 - Some windows (UWP, DRM) produce black frames in WGC as in Phase 1.
 - Cross-adapter capture (source on the iGPU monitor, projector on the dGPU) needs a copy through
   a shared texture; measure it on hybrid laptops.
+- `ProjectorDesk.Engine.exe` is a new executable. Unsigned, Smart App Control can block it even
+  where it has cleared the Electron app (seen on the Phase 1 test PC: each new build is judged
+  afresh). Check early whether an unsigned engine exe launches on the target PCs, and plan for
+  signing it (README → Code signing) before Phase 2 ships.
