@@ -210,6 +210,21 @@ npm run check      # typecheck (strict) + ESLint + Prettier + unit tests
 npm run dist:win   # NSIS installer + portable exe in dist/
 ```
 
+### Native engine (Phase 2, in progress)
+
+The Phase 2 output engine lives in `engine/` (C#, .NET 10, Win32 + Direct3D 11). It needs the
+[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) to build:
+
+```powershell
+npm run engine:build   # build/engine/ProjectorDesk.Engine.dll (also runs before npm run dev)
+npm run engine:test    # C# unit tests
+```
+
+Without the SDK, `npm run dev` warns and Phase 1 runs as before. The engine is never an `.exe`:
+it runs as `dotnet ProjectorDesk.Engine.dll` because Smart App Control may block new unsigned
+executables (see docs/ARCHITECTURE.md → Phase 2). Current step: **P2.0 feasibility**:
+Diagnostics → Native engine → Launch test window.
+
 ### Install scripts (npm 12+)
 
 npm 12 blocks dependency install scripts unless `package.json` → `allowScripts` lists them:

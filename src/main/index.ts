@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { describeError } from '@shared/recovery';
 import { resolveTarget } from '@shared/targeting';
 import { guardRenderer } from './crashGuard';
+import { NativeProbe } from './nativeProbe';
 import { extendDisplays } from './displaySwitch';
 import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
@@ -39,6 +40,9 @@ let settings: SettingsStore | null = null;
 let resumeOffer: { ref: SourceRef; sourceId: string } | null = null;
 let resumeHandled = false;
 let appError: string | null = null;
+const nativeProbe = new NativeProbe(() => {
+  pushState();
+});
 const startedAt = Date.now();
 let windowHelper: WindowHelper | null = null;
 let targetDisplayId: number | null = null;
@@ -86,6 +90,7 @@ function state(): AppState {
     settings: settings?.current ?? DEFAULT_SETTINGS,
     resumeOffer,
     appError,
+    nativeProbe: nativeProbe.current,
   };
 }
 
@@ -642,6 +647,12 @@ function registerIpc(): void {
   handle('app:report-error', controlWc, (message) => {
     reportAppError('Control Panel error', message);
   });
+  handle('native:probe-start', controlWc, () => {
+    void nativeProbe.start(targetDisplayId !== null ? findDisplay(targetDisplayId) : undefined);
+  });
+  handle('native:probe-stop', controlWc, async () => {
+    await nativeProbe.stop();
+  });
   handle('app:dismiss-error', controlWc, () => {
     appError = null;
     pushState();
@@ -767,6 +778,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', () => {
+    nativeProbe.dispose();
     engine?.shutdown();
     persistSettings();
     settings?.flush();

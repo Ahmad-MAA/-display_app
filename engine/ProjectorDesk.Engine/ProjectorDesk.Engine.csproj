@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 19041: WDA_EXCLUDEFROMCAPTURE and the Windows.Graphics.Capture projections. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!--
+      Smart App Control: no unsigned .exe of our own. The engine is a framework-dependent DLL
+      started as `dotnet ProjectorDesk.Engine.dll` (dotnet.exe is Microsoft-signed).
+    -->
+    <UseAppHost>false</UseAppHost>
+    <SelfContained>false</SelfContained>
+    <RootNamespace>ProjectorDesk.Engine</RootNamespace>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.355" PrivateAssets="all" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ProjectorDesk.Engine.Tests" />
+  </ItemGroup>
+
+</Project>

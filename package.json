@@ -9,6 +9,7 @@
   "private": true,
   "scripts": {
     "postinstall": "install-electron",
+    "predev": "node scripts/build-engine.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -20,7 +21,9 @@
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "dist:win": "npm run build && electron-builder --win",
-    "test": "vitest run"
+    "test": "vitest run",
+    "engine:build": "node scripts/build-engine.mjs --strict",
+    "engine:test": "dotnet test --solution engine/ProjectorDesk.Engine.slnx -c Release"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

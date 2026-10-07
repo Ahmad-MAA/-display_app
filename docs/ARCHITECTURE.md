@@ -245,14 +245,32 @@ removes all three.
 
 ### Shape
 
-A separate process, `ProjectorDesk.Engine.exe` (C# / .NET 8, WinUI 3, Windows.Graphics.Capture +
-Direct3D 11, the swap chain hosted in a `SwapChainPanel`), started and supervised by the Electron
-main process. If WinUI's composition measurably adds a frame, the same renderer can present
-from a plain Win32 window instead. Electron keeps the Control Panel, display logic, source enumeration, settings and
+A separate process: `ProjectorDesk.Engine.dll`, C# on **.NET 10** (LTS), a **plain Win32 window +
+Direct3D 11** (no WinUI 3), Windows.Graphics.Capture for capture. Interop: CsWin32 (source-generated
+Win32 P/Invoke) and Vortice.Windows (Direct3D 11 / DXGI). Started and supervised by the Electron
+main process. Electron keeps the Control Panel, display logic, source enumeration, settings and
 hotkeys; only the Output window and capture move.
 
+Why not WinUI 3: it needs the Windows App SDK runtime installed (one more component Smart App
+Control can block) and composites the swap chain through a XAML `SwapChainPanel`, an extra layer
+between the frame and the screen. A Win32 popup owning a flip-model swap chain has neither.
+
+**Smart App Control.** The reference PC has it on; an unsigned `.exe` (including a .NET apphost)
+may be blocked. So the engine is a framework-dependent DLL launched as
+`dotnet ProjectorDesk.Engine.dll` (`UseAppHost=false`, no self-contained build): the host process
+is Microsoft-signed `dotnet.exe`. Whether SAC also allows our unsigned managed assemblies (ours,
+Vortice, SharpGen) under that host is what **P2.0** checks on hardware. If it doesn't, stop and
+choose another route (signing first, or another host) before writing more code.
+
+Building: `npm run engine:build` (also run before `npm run dev`; without the .NET SDK it warns and
+Phase 1 runs as before) puts the engine in `build/engine/`. `npm run engine:test` runs the C#
+unit tests (MSTest on Microsoft.Testing.Platform; xunit v3 would require a test apphost). The
+projects set `EnableWindowsTargeting`, so they build and the pure parts test on Linux too. CI:
+`.github/workflows/engine.yml` builds, tests, checks that no `.exe` was produced, and launches
+the DLL via `dotnet --self-test` on `windows-latest`.
+
 ```
-Control Panel ──IPC──▶ main (Electron) ──\\.\pipe\projectordesk──▶ Engine.exe
+Control Panel ──IPC──▶ main (Electron) ──\\.\pipe\projectordesk──▶ dotnet Engine.dll
                          ▲   OutputEngine (NativeOutputEngine)        │ WGC → D3D11 → DXGI swap chain
                          └──────────── events (stats, ended, error) ◀─┘ on the projector, full screen
 ```
@@ -303,29 +321,43 @@ second; three missed → main treats the engine as crashed.
 
 ### Main-process side
 
-- `NativeOutputEngine implements OutputEngine` (`src/main/nativeOutputEngine.ts`): spawns the
-  exe from `resources/engine/`, connects the pipe, `decodeCommand`'s counterpart for events,
+- `NativeOutputEngine implements OutputEngine` (`src/main/nativeOutputEngine.ts`): runs
+  `dotnet ProjectorDesk.Engine.dll` from `resources/engine/` (dev: `build/engine/`), connects the pipe, `decodeCommand`'s counterpart for events,
   supervision with the same `RestartBudget` as the renderer crash guard (restart and resend the
   current state, as `recover()` does).
 - Engine choice at startup from settings; **fallback to the Electron engine** (with a banner) if
-  the exe is missing, fails to start, or the OS lacks WGC (`GraphicsCaptureSession.IsSupported()`
+  .NET 10 or the engine DLL is missing, it fails to start, or the OS lacks WGC (`GraphicsCaptureSession.IsSupported()`
   false, Windows 10 < 1903).
 - The Output BrowserWindow isn't created when the native engine runs; `CoverWatcher` and the
   follower get the engine window's HWND instead.
 
-### Migration steps
+### Build steps (each ends with a hardware check)
 
-1. Engine skeleton: pipe server, envelope parser, heartbeat; `NativeOutputEngine` that spawns and
-   supervises it. Contract tests: the same command script sent to both engines yields the same
-   event sequence (fake capture in the engine).
-2. Capture + present a window source, fit mode only; stats. Hardware gate: median latency
-   ≤ one frame at 60 Hz on the reference machine (Phase 1: ~25 ms).
-3. Fill/stretch/crop, blank/freeze, cursor hide; screens; source-ended; follow full screen
-   switching (`setSource` on the follower's decision, unchanged).
-4. HDR passthrough and tone-mapping; the HDR banner becomes conditional on the engine.
-5. Packaging: build the engine in CI (`dotnet publish -r win-x64 --self-contained`, trimmed),
-   ship it as an `extraResources` folder; enable the Settings option; Electron engine stays as the
-   fallback.
+The main driver is hiding the pointer on the projector; latency and HDR come second.
+
+- **P2.0 Feasibility.** Minimal engine DLL launched via `dotnet` from the Control Panel
+  (Diagnostics → Native engine): per-monitor DPI awareness v2, a borderless black window
+  excluded from capture before it shows (`WDA_EXCLUDEFROMCAPTURE`, read back), placed on the
+  projector's physical bounds and read back. It also loads each Phase 2 dependency once
+  (Windows.Graphics.Capture support, a Vortice D3D11 device) and reports each separately, so a
+  Smart App Control block names the assembly it hit. Reports are JSON lines on stdout
+  (`src/main/nativeProbe.ts`); a missing .NET 10 is a clear error with the download link.
+- **P2.1 Skeleton and placement.** Named pipe + versioned handshake (mismatch handled);
+  `NativeOutputEngine` in main; placement with the Phase 1 step-1 gate subset; capture-exclusion
+  recursion test.
+- **P2.2 Capture and render.** WGC from HWND or monitor (`IGraphicsCaptureItemInterop`),
+  free-threaded frame pool (2–3 buffers), flip-model swap chain with `SetMaximumFrameLatency(1)`,
+  letterboxed Fit, 150 ms fade, source closed, resize via `Recreate`, `IsBorderRequired = false`
+  where supported, cursor on/off (`IsCursorCaptureEnabled`).
+- **P2.3 Parity.** Fill/Stretch/crop, blank, freeze, stats overlay, Follow full screen; the same
+  stats into `sessions.jsonl` to compare with Phase 1 (~25 ms median).
+- **P2.4 HDR.** scRGB / HDR10 passthrough, tone-mapping to SDR projectors.
+- **P2.5 Packaging.** Engine DLL bundled with the app plus a .NET 10 runtime check with an install
+  prompt; signing still needed.
+
+Throughout: automatic fallback to the Electron engine (banner, projection continues) when the
+engine fails to start, crashes or a capture fails; Settings → Output engine becomes a real
+choice, default Electron until the P2 hardware gates pass.
 
 ### Risks
 
@@ -333,7 +365,7 @@ second; three missed → main treats the engine as crashed.
 - Some windows (UWP, DRM) produce black frames in WGC as in Phase 1.
 - Cross-adapter capture (source on the iGPU monitor, projector on the dGPU) needs a copy through
   a shared texture; measure it on hybrid laptops.
-- `ProjectorDesk.Engine.exe` is a new executable. Unsigned, Smart App Control can block it even
-  where it has cleared the Electron app (seen on the Phase 1 test PC: each new build is judged
-  afresh). Check early whether an unsigned engine exe launches on the target PCs, and plan for
-  signing it (README → Code signing) before Phase 2 ships.
+- Smart App Control: new unsigned binaries can be blocked even where the Electron app was
+  cleared (seen on the Phase 1 test PC: each new build is judged afresh). Mitigation: no engine
+  `.exe` at all (DLL under the signed `dotnet.exe`), verified by P2.0; signing (README → Code
+  signing) is still needed before Phase 2 ships.

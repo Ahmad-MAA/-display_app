@@ -29,6 +29,36 @@ export const HARDWARE_CHECKS: readonly {
   note?: (s: AppState) => string;
 }[] = [
   {
+    id: 'p2-0-launch',
+    label:
+      "P2.0: Diagnostics → Native engine → Launch test window → a black window covers the whole projector, on top of the Output; Windows shows NO Smart App Control block; the card says RUNNING with both probes ✓, capture exclusion verified, placement exact. (Blocked or failed? Mark Fail and Copy report: it includes the engine's error output.)",
+    requires: (_l, s) => {
+      const n = s.nativeProbe;
+      if (n.state !== 'running') return 'launch the test window first';
+      if (n.probes.some((p) => !p.ok)) return 'a probe failed (see the Native engine card)';
+      if (!n.affinity?.verified) return 'capture exclusion not verified';
+      if (!n.placement?.exact) return 'placement not exact';
+      return null;
+    },
+  },
+  {
+    id: 'p2-0-mixed-dpi',
+    label:
+      'P2.0: with the laptop at 125 % or 150 % and the projector at 100 % (mixed DPI), Launch test window again → placement still exact',
+    requires: (l, s) =>
+      l.primary.scaleFactor === l.secondary.scaleFactor
+        ? 'set different scaling on the two displays'
+        : s.nativeProbe.state === 'running' && s.nativeProbe.placement?.exact
+          ? null
+          : 'launch the test window in this layout',
+  },
+  {
+    id: 'p2-0-close',
+    label:
+      'P2.0: Close test window → the black window disappears and the projector shows the Output again; the card says STOPPED',
+    requires: (_l, s) => (s.nativeProbe.state === 'stopped' ? null : 'close the test window first'),
+  },
+  {
     id: 'step8-installer',
     label:
       'Step 8: run ProjectorDesk-Setup-<version>.exe → install, start it from the Start menu, project something; then uninstall it from Settings → Apps (your settings stay in %APPDATA%\\ProjectorDesk)',

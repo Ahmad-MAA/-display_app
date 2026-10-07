@@ -171,3 +171,17 @@ Control later cleared the installed 0.1.0 build on that PC; new builds and new e
 still be blocked.
 
 Phase 1 complete.
+
+# Phase 2
+
+## P2.0 feasibility (Smart App Control)
+
+Container (Linux): engine builds with the .NET 10.0.401 SDK, 14 engine unit tests pass, no `.exe`
+in the output; `dotnet ProjectorDesk.Engine.dll --self-test` runs. The Control Panel path (find
+.NET 10, start `dotnet`, parse the engine's reports, show errors) was exercised end to end; on
+Linux the engine correctly stops with its platform error. A missing .NET gives the install
+message with the download link.
+
+Shipped DLLs: `Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll` are Microsoft-signed; ours,
+`Vortice.*` and `SharpGen.Runtime*` are unsigned. That is exactly what the hardware check
+answers. Hardware: the "P2.0" items, pending.

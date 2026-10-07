@@ -52,6 +52,9 @@ export interface ControlInvokeMap {
   'app:report-error': { args: [message: string]; result: void };
   /** Close the "Something went wrong" banner. */
   'app:dismiss-error': { args: []; result: void };
+  /** P2.0: start the native engine's test window on the projector / close it. */
+  'native:probe-start': { args: []; result: void };
+  'native:probe-stop': { args: []; result: void };
 }
 
 /** main → Control Panel, push events (webContents.send / ipcRenderer.on). */
@@ -124,6 +127,8 @@ export const CONTROL_INVOKE_CHANNELS: readonly ControlInvokeChannel[] = [
   'settings:resume',
   'app:report-error',
   'app:dismiss-error',
+  'native:probe-start',
+  'native:probe-stop',
 ];
 
 export const CONTROL_EVENT_CHANNELS: readonly ControlEventChannel[] = [

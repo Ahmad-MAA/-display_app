@@ -1,0 +1,38 @@
+name: Native engine
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build engine
+        run: dotnet build engine/ProjectorDesk.Engine/ProjectorDesk.Engine.csproj -c Release -o build/engine
+
+      - name: Unit tests
+        run: dotnet test --solution engine/ProjectorDesk.Engine.slnx -c Release
+
+      - name: No apphost (.exe) in the engine output
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build/engine -Filter *.exe
+          if ($exe) { Write-Error "Unexpected executables: $($exe.Name -join ', ')"; exit 1 }
+
+      - name: Launch via dotnet (self-test)
+        shell: pwsh
+        run: |
+          $out = dotnet build/engine/ProjectorDesk.Engine.dll --self-test
+          $out | Write-Output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not ($out | Select-String '"type":"hello"')) { Write-Error 'no hello line'; exit 1 }

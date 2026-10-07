@@ -32,6 +32,8 @@ export interface ControlApi {
   resume(accept: boolean): Promise<ProjectResult>;
   reportError(message: string): Promise<void>;
   dismissError(): Promise<void>;
+  startNativeProbe(): Promise<void>;
+  stopNativeProbe(): Promise<void>;
 }
 
 export interface OutputApi {

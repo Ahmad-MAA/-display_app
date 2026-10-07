@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ProjectorDesk.Engine/ProjectorDesk.Engine.csproj" />
+  <Project Path="ProjectorDesk.Engine.Tests/ProjectorDesk.Engine.Tests.csproj" />
+</Solution>
