@@ -1,0 +1,38 @@
+appId: app.projectordesk
+productName: ProjectorDesk
+copyright: Copyright © 2026 ProjectorDesk contributors
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+# No auto-update feed: releases are installed by hand.
+publish: null
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch: x64
+    - target: portable
+      arch: x64
+  requestedExecutionLevel: asInvoker
+  # Code signing with Azure Trusted Signing (README → Code signing). Credentials come from
+  # AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET; never put them in this file.
+  # azureSignOptions:
+  #   publisherName: Your Name or Company
+  #   endpoint: https://eus.codesigning.azure.net/
+  #   codeSigningAccountName: your-account-name
+  #   certificateProfileName: your-profile-name
+nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ProjectorDesk
+  # Settings, favorites and logs in %APPDATA%\ProjectorDesk survive an uninstall/upgrade.
+  deleteAppDataOnUninstall: false
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
