@@ -31,10 +31,10 @@ export const HARDWARE_CHECKS: readonly {
   {
     id: 'p2-0-launch',
     label:
-      "P2.0: Diagnostics → Native engine → Launch test window → a black window covers the whole projector, on top of the Output; Windows shows NO Smart App Control block; the card says RUNNING with both probes ✓, capture exclusion verified, placement exact. (Blocked or failed? Mark Fail and Copy report: it includes the engine's error output.)",
+      "P2.0: Diagnostics → Native engine → Launch test window → a black window covers the whole projector, on top of the Output; Windows shows NO Smart App Control block; the card says PLACED with both probes ✓, capture exclusion verified, placement exact. (Blocked or failed? Mark Fail and Copy report: it includes the engine's error output.)",
     requires: (_l, s) => {
-      const n = s.nativeProbe;
-      if (n.state !== 'running') return 'launch the test window first';
+      const n = s.nativeEngine;
+      if (n.state !== 'placed') return 'launch the test window first';
       if (n.probes.some((p) => !p.ok)) return 'a probe failed (see the Native engine card)';
       if (!n.affinity?.verified) return 'capture exclusion not verified';
       if (!n.placement?.exact) return 'placement not exact';
@@ -42,21 +42,61 @@ export const HARDWARE_CHECKS: readonly {
     },
   },
   {
-    id: 'p2-0-mixed-dpi',
-    label:
-      'P2.0: with the laptop at 125 % or 150 % and the projector at 100 % (mixed DPI), Launch test window again → placement still exact',
-    requires: (l, s) =>
-      l.primary.scaleFactor === l.secondary.scaleFactor
-        ? 'set different scaling on the two displays'
-        : s.nativeProbe.state === 'running' && s.nativeProbe.placement?.exact
-          ? null
-          : 'launch the test window in this layout',
-  },
-  {
     id: 'p2-0-close',
     label:
       'P2.0: Close test window → the black window disappears and the projector shows the Output again; the card says STOPPED',
-    requires: (_l, s) => (s.nativeProbe.state === 'stopped' ? null : 'close the test window first'),
+    requires: (_l, s) =>
+      s.nativeEngine.state === 'stopped' ? null : 'close the test window first',
+  },
+  {
+    id: 'p2-1-handshake',
+    label:
+      'P2.1: the card shows “engine 0.2.x · protocol v1” and a heartbeat time that keeps updating (every ~5 s)',
+    requires: (_l, s) =>
+      s.nativeEngine.engine?.protocol === 1 && s.nativeEngine.lastHeartbeatAt
+        ? null
+        : 'launch the test window first',
+  },
+  {
+    id: 'p2-1-recursion',
+    label:
+      "P2.1: capture exclusion: with the test window up, Sources → Screens → the projector screen's thumbnail shows what is BEHIND the black window (your Output / desktop), not black; a Win+Shift+S snip of the projector shows the same",
+    requires: (_l, s) =>
+      s.nativeEngine.state === 'placed' ? null : 'launch the test window first',
+  },
+  ...(
+    [
+      ['p2-1-dpi-primary-high', 'laptop at 125 % or 150 %, projector at 100 %'],
+      ['p2-1-dpi-secondary-high', 'laptop at 100 %, projector at 125 % or 150 %'],
+      ['p2-1-pos-left', 'projector LEFT of the laptop'],
+      ['p2-1-pos-right', 'projector RIGHT of the laptop'],
+      ['p2-1-pos-above', 'projector ABOVE the laptop'],
+    ] as const
+  ).map(([id, what]) => ({
+    id,
+    label: `P2.1: ${what} (Settings → Display) → the test window moves with the projector and the card says placement exact`,
+    requires: (l: Layout, s: AppState) => {
+      const { primary: p, secondary: q } = l;
+      const layoutOk = {
+        'p2-1-dpi-primary-high': p.scaleFactor >= 1.25 && q.scaleFactor === 1,
+        'p2-1-dpi-secondary-high': p.scaleFactor === 1 && q.scaleFactor >= 1.25,
+        'p2-1-pos-left': q.bounds.x + q.bounds.width <= p.bounds.x,
+        'p2-1-pos-right': q.bounds.x >= p.bounds.x + p.bounds.width,
+        'p2-1-pos-above': q.bounds.y + q.bounds.height <= p.bounds.y,
+      }[id];
+      if (!layoutOk) return `set the layout: ${what}`;
+      const n = s.nativeEngine;
+      return n.state === 'placed' && n.placement?.exact && n.targetDisplayId === q.id
+        ? null
+        : 'launch the test window in this layout (placement must be exact)';
+    },
+  })),
+  {
+    id: 'p2-1-hotplug',
+    label:
+      'P2.1: unplug the projector while the test window is up → card says HIDDEN; plug it back in → the window returns on the projector, placement exact (“back after unplug: 1”)',
+    requires: (_l, s) =>
+      s.nativeEngine.hotplugRecoveries > 0 ? null : 'unplug and replug with the test window up',
   },
   {
     id: 'step8-installer',

@@ -1,4 +1,4 @@
-import { formatPixelRect, type NativeProbeStatus } from '@shared/nativeEngine';
+import { formatPixelRect, type NativeEngineStatus } from '@shared/nativeEngine';
 import type { AppState, LogEntry, PlacementReport } from '@shared/diagnostics';
 import type { SourceList } from '@shared/sources';
 import { formatRect } from '@shared/displays';
@@ -56,11 +56,15 @@ function placementBlock(p: PlacementReport | null): string {
   ].join('\n');
 }
 
-function nativeBlock(n: NativeProbeStatus): string {
+function nativeBlock(n: NativeEngineStatus): string {
   const lines = [`- state: **${n.state}**: ${n.message}`];
   if (n.runtime)
     lines.push(
       `- .NET ${n.runtime} via \`${n.dotnetPath ?? '?'}\`; engine \`${n.engineDll ?? '?'}\``,
+    );
+  if (n.engine)
+    lines.push(
+      `- engine ${n.engine.version}, protocol v${n.engine.protocol}, ${n.engine.runtime}, ${n.engine.os}`,
     );
   for (const p of n.probes) lines.push(`- probe ${p.name}: ${p.ok ? '✅' : '❌'} ${p.detail}`);
   if (n.dpiAwareness) lines.push(`- DPI awareness: ${n.dpiAwareness}`);
@@ -71,9 +75,11 @@ function nativeBlock(n: NativeProbeStatus): string {
   if (n.placement) {
     const p = n.placement;
     lines.push(
-      `- placement: ${p.exact ? '✅ exact' : `❌ ${p.problems.join('; ')}`}; requested ${formatPixelRect(p.requested)}, window ${formatPixelRect(p.actual)}, monitor ${formatPixelRect(p.monitor)} (physical px)`,
+      `- placement: ${p.exact ? '✅ exact' : `❌ ${p.problems.join('; ')}`}; requested ${formatPixelRect(p.requested)}, window ${formatPixelRect(p.actual)}, monitor ${formatPixelRect(p.monitor)} (physical px)${p.notes.length ? `; ${p.notes.join('; ')}` : ''}`,
     );
   }
+  if (n.placements)
+    lines.push(`- placements: ${n.placements}, back after unplug: ${n.hotplugRecoveries}`);
   if (n.exitCode !== null) lines.push(`- exit code: ${n.exitCode}`);
   if (n.stderr) lines.push('```', n.stderr.trimEnd(), '```');
   return lines.join('\n');
@@ -109,8 +115,8 @@ export function buildReport(
 ### Content protection
 ${cp ? `${cp.ok ? '✅' : '❌'} ${cp.message} (platform ${cp.platform} ${cp.osVersion}, isContentProtected=${cp.reportedByElectron})` : 'n/a'}
 
-### Native engine (P2.0 feasibility)
-${nativeBlock(state.nativeProbe)}
+### Native engine (Phase 2)
+${nativeBlock(state.nativeEngine)}
 
 ### Window helper
 ${state.windowHelper.supported ? (state.windowHelper.reason ? `❌ unavailable: ${state.windowHelper.reason}` : '✅ running (or not needed yet)') : 'n/a (not Windows)'}

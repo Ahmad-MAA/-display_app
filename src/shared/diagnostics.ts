@@ -4,7 +4,7 @@ import type { CoveringWindow } from './covering';
 import type { OutputDisplay } from './geometry';
 import type { EngineStats } from './outputEngine';
 import type { ProjectionInfo } from './projection';
-import type { NativeProbeStatus } from './nativeEngine';
+import type { NativeEngineStatus } from './nativeEngine';
 import type { Settings, SourceRef } from './settings';
 import type { SessionSummary } from './stats';
 
@@ -126,6 +126,6 @@ export interface AppState {
   resumeOffer: { ref: SourceRef; sourceId: string } | null;
   /** Unexpected failure the presenter should know about (details in the log); null = none. */
   appError: string | null;
-  /** P2.0 native engine feasibility check. */
-  nativeProbe: NativeProbeStatus;
+  /** Phase 2 native engine (test window in P2.1). */
+  nativeEngine: NativeEngineStatus;
 }

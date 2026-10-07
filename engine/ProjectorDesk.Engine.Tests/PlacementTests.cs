@@ -11,6 +11,7 @@ public sealed class PlacementTests
         var r = Placement.Evaluate(Projector, Projector, Projector);
         Assert.IsTrue(r.Exact);
         Assert.IsEmpty(r.Problems);
+        Assert.IsEmpty(r.Notes);
     }
 
     [TestMethod]
@@ -26,9 +27,19 @@ public sealed class PlacementTests
     public void ReportsWrongMonitor()
     {
         var laptop = new PixelRect(0, 0, 1920, 1200);
-        var r = Placement.Evaluate(Projector, Projector, laptop);
+        var r = Placement.Evaluate(Projector, laptop, laptop);
         Assert.IsFalse(r.Exact);
         Assert.HasCount(1, r.Problems);
-        Assert.Contains("monitor", r.Problems[0]);
+        Assert.Contains("not on the requested", r.Problems[0]);
+    }
+
+    [TestMethod]
+    public void SnapsSmallDifferencesAsANote()
+    {
+        // Electron's DIP→pixel conversion one pixel off: still the right monitor, exact cover.
+        var requested = Projector with { Y = 68 };
+        var r = Placement.Evaluate(requested, Projector, Projector);
+        Assert.IsTrue(r.Exact);
+        Assert.HasCount(1, r.Notes);
     }
 }

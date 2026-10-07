@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { decodeCommand, dispatchCommand, encodeEnvelope } from './engineProtocol';
+import {
+  ProtocolMismatchError,
+  decodeCommand,
+  decodeEvent,
+  dispatchCommand,
+  encodeEnvelope,
+} from './engineProtocol';
 import type { EngineCommand, OutputEngine } from './outputEngine';
 
 function fakeEngine() {
@@ -49,5 +55,38 @@ describe('engine protocol', () => {
     expect(e.setCursor).toHaveBeenCalledWith(false);
     expect(e.setCrop).toHaveBeenCalledWith({ x: 0, y: 0, width: 0.5, height: 0.5 });
     expect(e.setSource).toHaveBeenCalledWith(null);
+  });
+
+  it('decodes engine events and flags a protocol mismatch explicitly', () => {
+    const hello = {
+      type: 'hello',
+      protocol: 1,
+      engine: 'ProjectorDesk.Engine',
+      version: '0.2.0',
+      runtime: '.NET 10.0.12',
+      os: 'Windows',
+      token: 't',
+    };
+    expect(decodeEvent(JSON.stringify({ v: 1, seq: 1, msg: hello })).msg).toEqual(hello);
+    expect(decodeEvent('{"v":1,"seq":2,"msg":{"type":"heartbeat"}}').msg.type).toBe('heartbeat');
+    expect(() => decodeEvent('{"v":2,"seq":1,"msg":{"type":"heartbeat"}}')).toThrow(
+      ProtocolMismatchError,
+    );
+    expect(() => decodeEvent('{"v":1,"seq":1,"msg":{"type":"setSource"}}')).toThrow(
+      /unknown event/,
+    );
+  });
+
+  it('carries start bounds and shutdown as commands', () => {
+    const start: EngineCommand = {
+      type: 'start',
+      targetDisplayId: 5,
+      bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+      topmost: true,
+    };
+    expect(decodeCommand(encodeEnvelope(1, start)).msg).toEqual(start);
+    expect(decodeCommand(encodeEnvelope(2, { type: 'shutdown' })).msg).toEqual({
+      type: 'shutdown',
+    });
   });
 });

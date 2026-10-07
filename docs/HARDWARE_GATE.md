@@ -184,4 +184,15 @@ message with the download link.
 
 Shipped DLLs: `Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll` are Microsoft-signed; ours,
 `Vortice.*` and `SharpGen.Runtime*` are unsigned. That is exactly what the hardware check
-answers. Hardware: the "P2.0" items, pending.
+answers.
+
+Hardware (2026-10-07, Windows 11 build 26300, Smart App Control **on**, Intel Graphics):
+`dotnet build\engine\ProjectorDesk.Engine.dll --self-test` → hello + both probes OK
+(Windows.Graphics.Capture supported; D3D11 hardware device, feature level 11_1). So SAC allows
+our unsigned managed DLLs under the signed `dotnet.exe`. **Feasibility: PASS.**
+
+Found on the way: SAC now blocks the official, unsigned Electron 44.5.1 `electron.exe` in
+`node_modules` (hash `49B61A03…C7FA`, identical to the file that ran during Phase 1), so
+`npm run dev` fails with `spawn UNKNOWN`. Electron's version never changed (lockfile history).
+Workaround: `npm run dev:host` (dev build inside the cleared installed ProjectorDesk).
+Pending: the test window itself (standalone command or the app's card) and the P2.1 items.

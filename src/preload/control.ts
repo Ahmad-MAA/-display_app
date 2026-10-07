@@ -49,8 +49,8 @@ const api: ControlApi = {
   resume: (accept) => invoke('settings:resume', accept),
   reportError: (message) => invoke('app:report-error', message),
   dismissError: () => invoke('app:dismiss-error'),
-  startNativeProbe: () => invoke('native:probe-start'),
-  stopNativeProbe: () => invoke('native:probe-stop'),
+  startNativeEngine: () => invoke('native:start'),
+  stopNativeEngine: () => invoke('native:stop'),
   onLog: (cb: (e: ControlEventMap['log:entry']) => void) => on('log:entry', cb),
 };
 

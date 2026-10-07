@@ -6,6 +6,8 @@ using Vortice.DXGI;
 
 namespace ProjectorDesk.Engine;
 
+internal sealed record ProbeResult(string Name, bool Ok, string Detail);
+
 /// <summary>
 /// Loads each Phase 2 dependency once, in its own method, so a load failure (for example
 /// Smart App Control refusing an assembly) is reported as that probe's failure instead of
@@ -15,21 +17,21 @@ namespace ProjectorDesk.Engine;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal static class Probes
 {
-    public static void RunAll()
+    public static void RunAll(Action<ProbeResult> report)
     {
-        Run("windows-graphics-capture", ProbeGraphicsCapture);
-        Run("direct3d11", ProbeDirect3D11);
+        report(Run("windows-graphics-capture", ProbeGraphicsCapture));
+        report(Run("direct3d11", ProbeDirect3D11));
     }
 
-    private static void Run(string name, Func<string> probe)
+    private static ProbeResult Run(string name, Func<string> probe)
     {
         try
         {
-            EngineOutput.Write(new ProbeMessage(name, true, probe()));
+            return new ProbeResult(name, true, probe());
         }
         catch (Exception ex)
         {
-            EngineOutput.Write(new ProbeMessage(name, false, $"{ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}"));
+            return new ProbeResult(name, false, $"{ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}");
         }
     }
 

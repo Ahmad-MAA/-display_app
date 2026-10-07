@@ -52,6 +52,8 @@ export type EngineErrorCode =
   | 'source-ended'
   | 'display-not-found'
   | 'content-protection-unsupported'
+  | 'protocol-mismatch'
+  | 'platform'
   | 'internal';
 
 export interface EngineError {
@@ -78,9 +80,37 @@ export interface OutputEngine {
 }
 
 /** Commands main → engine. */
+/** A rectangle in physical (device) pixels, as the native engine sees monitors. */
+export interface PhysicalRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface EnginePlacement {
+  /** What the app asked for (Electron display bounds converted to physical pixels). */
+  requested: PhysicalRect;
+  /** Where the engine window actually is. */
+  actual: PhysicalRect;
+  /** Bounds of the monitor Windows says the window is on. */
+  monitor: PhysicalRect;
+  exact: boolean;
+  problems: string[];
+  /** Harmless differences, e.g. a 1 px rounding difference snapped to the monitor's bounds. */
+  notes: string[];
+}
+
 export type EngineCommand =
-  | { type: 'start'; targetDisplayId: number }
+  /**
+   * Show the output on the target display. `bounds` (physical pixels) is what a native engine
+   * places on: it can't map Electron's display id to a monitor itself. `topmost` keeps the
+   * window above everything (the P2.1 test window must cover Phase 1's Output).
+   */
+  | { type: 'start'; targetDisplayId: number; bounds?: PhysicalRect; topmost?: boolean }
   | { type: 'stop' }
+  /** Close the engine process (native engine only). */
+  | { type: 'shutdown' }
   | { type: 'setSource'; source: SourceDescriptor | null }
   | { type: 'setFillMode'; mode: FillMode }
   | { type: 'setCrop'; rect: CropRect | null }
@@ -90,6 +120,26 @@ export type EngineCommand =
 
 /** Events engine → main. */
 export type EngineEvent =
+  /** First message on the pipe; `token` proves the engine is the one this app started. */
+  | {
+      type: 'hello';
+      protocol: number;
+      engine: string;
+      version: string;
+      runtime: string;
+      os: string;
+      token: string;
+    }
+  /** One dependency the engine loaded (or failed to), e.g. Windows.Graphics.Capture. */
+  | { type: 'probe'; name: string; ok: boolean; detail: string }
+  | {
+      type: 'placed';
+      placement: EnginePlacement;
+      affinity: { requested: string; actual: string; verified: boolean };
+      dpiAwareness: string;
+    }
+  /** Sent from the engine's window thread every second: a hung engine stops beating. */
+  | { type: 'heartbeat' }
   | { type: 'stats'; stats: EngineStats }
   | { type: 'sourceEnded'; source: SourceDescriptor }
   | { type: 'error'; error: EngineError };

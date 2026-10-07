@@ -1,9 +1,10 @@
 /**
- * Phase 2 native engine (C# + Direct3D 11), started as `dotnet ProjectorDesk.Engine.dll`.
- * P2.0: a feasibility probe that opens the engine's black window on the projector and reports
- * what loaded. Pure helpers here; process handling in src/main/nativeProbe.ts.
+ * Phase 2 native engine (C# + Direct3D 11), started as `dotnet ProjectorDesk.Engine.dll` and
+ * driven over a named pipe. Pure helpers here; process and pipe handling in
+ * src/main/nativeEngineHost.ts.
  */
 import type { Rect } from './displays';
+import type { EnginePlacement, PhysicalRect } from './outputEngine';
 
 export const DOTNET_MAJOR = 10;
 export const DOTNET_DOWNLOAD_URL = 'https://dotnet.microsoft.com/download/dotnet/10.0';
@@ -33,116 +34,66 @@ export function pickRuntime(versions: readonly string[], major = DOTNET_MAJOR): 
   return matching.at(-1) ?? null;
 }
 
-export interface PixelRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export interface ProbeResult {
   name: string;
   ok: boolean;
   detail: string;
 }
 
-/** Lines the engine writes on stdout in P2.0 (one JSON object per line). */
-export type EngineReport =
-  | {
-      type: 'hello';
-      engine: string;
-      version: string;
-      report: number;
-      runtime: string;
-      os: string;
-      selfTest: boolean;
-    }
-  | ({ type: 'probe' } & ProbeResult)
-  | {
-      type: 'ready';
-      dpiAwareness: string;
-      affinity: { requested: string; actual: string; verified: boolean };
-      placement: {
-        requested: PixelRect;
-        actual: PixelRect;
-        monitor: PixelRect;
-        exact: boolean;
-        problems: string[];
-      };
-    }
-  | { type: 'error'; stage: string; message: string; hresult?: string }
-  | { type: 'bye'; reason: string };
+export type NativeEngineState =
+  'idle' | 'checking' | 'starting' | 'connected' | 'placed' | 'hidden' | 'stopped' | 'failed';
 
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-/** Parse one stdout line; anything that isn't a known report (e.g. runtime noise) is null. */
-export function parseEngineLine(line: string): EngineReport | null {
-  const t = line.trim();
-  if (!t.startsWith('{')) return null;
-  let v: unknown;
-  try {
-    v = JSON.parse(t);
-  } catch {
-    return null;
-  }
-  if (!isObj(v) || typeof v['type'] !== 'string') return null;
-  switch (v['type']) {
-    case 'hello':
-    case 'probe':
-    case 'ready':
-    case 'error':
-    case 'bye':
-      return v as EngineReport;
-    default:
-      return null;
-  }
-}
-
-export type NativeProbeState = 'idle' | 'checking' | 'starting' | 'running' | 'stopped' | 'failed';
-
-export interface NativeProbeStatus {
-  state: NativeProbeState;
+export interface NativeEngineStatus {
+  state: NativeEngineState;
   /** One line for the panel: what happened or what to do. */
   message: string;
   dotnetPath: string | null;
   runtime: string | null;
   engineDll: string | null;
   pid: number | null;
+  pipe: string | null;
+  /** From the engine's hello, once the pipe handshake succeeded. */
+  engine: { version: string; runtime: string; os: string; protocol: number } | null;
   probes: ProbeResult[];
   dpiAwareness: string | null;
   affinity: { actual: string; verified: boolean } | null;
-  placement: {
-    requested: PixelRect;
-    actual: PixelRect;
-    monitor: PixelRect;
-    exact: boolean;
-    problems: string[];
-  } | null;
-  /** Target display in DIPs, for the report. */
+  placement: EnginePlacement | null;
+  /** Electron display the engine was last placed on, and its DIP bounds (for the report). */
+  targetDisplayId: number | null;
   targetDip: Rect | null;
+  /** Successful placements this run (first show + every re-place on a display change). */
+  placements: number;
+  /** Times the window came back, exactly placed, after its display was unplugged. */
+  hotplugRecoveries: number;
+  lastHeartbeatAt: string | null;
   exitCode: number | null;
-  /** Last lines the process wrote to stderr (runtime or loader errors). */
+  /** Last lines the process wrote to stderr / stdout (runtime or loader errors). */
   stderr: string;
   at: string;
 }
 
-export const IDLE_NATIVE_PROBE: NativeProbeStatus = {
+export const IDLE_NATIVE_ENGINE: NativeEngineStatus = {
   state: 'idle',
-  message: 'Not run yet.',
+  message: 'Not started.',
   dotnetPath: null,
   runtime: null,
   engineDll: null,
   pid: null,
+  pipe: null,
+  engine: null,
   probes: [],
   dpiAwareness: null,
   affinity: null,
   placement: null,
+  targetDisplayId: null,
   targetDip: null,
+  placements: 0,
+  hotplugRecoveries: 0,
+  lastHeartbeatAt: null,
   exitCode: null,
   stderr: '',
   at: '',
 };
 
-export const formatPixelRect = (r: PixelRect): string =>
+export const formatPixelRect = (r: PhysicalRect): string =>
   `${r.width}×${r.height} @ (${r.x}, ${r.y})`;

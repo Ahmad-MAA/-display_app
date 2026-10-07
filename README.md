@@ -222,8 +222,41 @@ npm run engine:test    # C# unit tests
 
 Without the SDK, `npm run dev` warns and Phase 1 runs as before. The engine is never an `.exe`:
 it runs as `dotnet ProjectorDesk.Engine.dll` because Smart App Control may block new unsigned
-executables (see docs/ARCHITECTURE.md → Phase 2). Current step: **P2.0 feasibility**:
-Diagnostics → Native engine → Launch test window.
+executables (see docs/ARCHITECTURE.md → Phase 2). In the app: Diagnostics → Native engine →
+Launch test window.
+
+**Standalone test window** (no Electron needed; physical pixels, as the engine sees them):
+
+```powershell
+npm run engine:build
+dotnet build\engine\ProjectorDesk.Engine.dll --list-monitors              # monitors, physical px
+dotnet build\engine\ProjectorDesk.Engine.dll --monitor secondary --topmost # black test window
+```
+
+The second command prints a `ready` line (capture exclusion, DPI awareness, placement) and keeps
+the window up until you type `quit` and press Enter (or close the terminal). Use
+`--monitor <number>` from the list, or `--x --y --width --height`, to target another monitor.
+`--self-test` only loads the dependencies and exits.
+
+### Smart App Control and `npm run dev`
+
+The official `electron.exe` in `node_modules` is **not signed**, so Smart App Control may block
+it (`spawn UNKNOWN`, a block notification) even though nothing in the project changed; seen
+on the reference PC with the same Electron 44.5.1 file that ran earlier. Workaround until the
+project is signed: run dev builds inside an **installed ProjectorDesk that Smart App Control
+has already cleared** (same Electron version):
+
+```powershell
+npm run devhost:install   # once: adds a small loader to %LOCALAPPDATA%\Programs\ProjectorDesk\resources\app
+npm run dev:host          # like npm run dev (hot reload), but runs in the installed ProjectorDesk.exe
+npm run devhost:remove    # removes the loader again
+```
+
+The loader is plain JavaScript; the installed `.exe` and DLLs are not touched, and starting
+ProjectorDesk from the Start menu still runs the installed version. Pass another install folder
+with `node scripts/devhost.mjs install --dir <folder>` (and `run --dir <folder>`). Reinstalling
+or upgrading ProjectorDesk removes the loader: run `devhost:install` again. If Smart App Control
+ever stops trusting the installed build too, only signing helps (see Code signing).
 
 ### Install scripts (npm 12+)
 

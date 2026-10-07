@@ -262,6 +262,13 @@ is Microsoft-signed `dotnet.exe`. Whether SAC also allows our unsigned managed a
 Vortice, SharpGen) under that host is what **P2.0** checks on hardware. If it doesn't, stop and
 choose another route (signing first, or another host) before writing more code.
 
+Dev on a Smart App Control PC: the official `electron.exe` is unsigned and SAC started blocking
+it (same file that ran during Phase 1). `scripts/devhost/` is a loader that goes into an installed,
+already-cleared ProjectorDesk's `resources/app` (Electron loads `app/` before `app.asar`); with a
+project path argument it runs that project (`app.setAppPath`, `PROJECTORDESK_DEV_ROOT`),
+otherwise the installed `app.asar`. `npm run dev:host` points electron-vite at the installed exe
+via `ELECTRON_EXEC_PATH`.
+
 Building: `npm run engine:build` (also run before `npm run dev`; without the .NET SDK it warns and
 Phase 1 runs as before) puts the engine in `build/engine/`. `npm run engine:test` runs the C#
 unit tests (MSTest on Microsoft.Testing.Platform; xunit v3 would require a test apphost). The
@@ -340,11 +347,24 @@ The main driver is hiding the pointer on the projector; latency and HDR come sec
   excluded from capture before it shows (`WDA_EXCLUDEFROMCAPTURE`, read back), placed on the
   projector's physical bounds and read back. It also loads each Phase 2 dependency once
   (Windows.Graphics.Capture support, a Vortice D3D11 device) and reports each separately, so a
-  Smart App Control block names the assembly it hit. Reports are JSON lines on stdout
-  (`src/main/nativeProbe.ts`); a missing .NET 10 is a clear error with the download link.
-- **P2.1 Skeleton and placement.** Named pipe + versioned handshake (mismatch handled);
-  `NativeOutputEngine` in main; placement with the Phase 1 step-1 gate subset; capture-exclusion
-  recursion test.
+  Smart App Control block names the assembly it hit. Standalone modes (`--self-test`,
+  `--list-monitors`, `--monitor secondary`) print JSON lines on stdout, so it can be tested
+  without Electron; a missing .NET 10 is a clear error in the app with the download link.
+  **Result:** the self-test passed on the reference PC with Smart App Control on: our unsigned
+  DLL plus the unsigned Vortice/SharpGen DLLs load under `dotnet.exe`.
+- **P2.1 Skeleton and placement.** `src/main/nativeEngineHost.ts` creates a fresh pipe per launch
+  (`\\.\pipe\projectordesk-<pid>-<random>`, or `$TMPDIR/CoreFxPipe_<name>` off Windows, which is
+  where .NET's pipe client looks), starts `dotnet ProjectorDesk.Engine.dll --pipe <name> --token
+<random>`, and requires a `hello` with that token and protocol version 1 within 30 s (a
+  version mismatch says "rebuild the engine"). The engine sends a `heartbeat` from its window
+  thread every second; 3.5 s without one counts as hung. Placement: main sends `start` with the
+  target display's physical bounds (`screen.dipToScreenRect`); the engine snaps to the monitor
+  containing them (`MonitorFromRect`), shows the window there, reads back window and monitor
+  rects and replies `placed` (exact or the problems). Main re-sends `start` on every Phase 1
+  placement (display change, primary swap, replug) and `stop` on unplug or emergency hide; an
+  exact placement after an unplug counts as a hot-plug recovery. Closing the app closes the
+  pipe, which closes the engine. P2.1's window is a topmost black test surface over Phase 1's
+  Output; the engine choice and automatic fallback arrive with capture in P2.2.
 - **P2.2 Capture and render.** WGC from HWND or monitor (`IGraphicsCaptureItemInterop`),
   free-threaded frame pool (2–3 buffers), flip-model swap chain with `SetMaximumFrameLatency(1)`,
   letterboxed Fit, 150 ms fade, source closed, resize via `Recreate`, `IsBorderRequired = false`

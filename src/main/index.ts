@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { describeError } from '@shared/recovery';
 import { resolveTarget } from '@shared/targeting';
 import { guardRenderer } from './crashGuard';
-import { NativeProbe } from './nativeProbe';
+import { NativeEngineHost } from './nativeEngineHost';
 import { extendDisplays } from './displaySwitch';
 import { findDisplay, listDisplays } from './displays';
 import { handle, onOutput, sendToControl } from './ipc';
@@ -40,7 +40,7 @@ let settings: SettingsStore | null = null;
 let resumeOffer: { ref: SourceRef; sourceId: string } | null = null;
 let resumeHandled = false;
 let appError: string | null = null;
-const nativeProbe = new NativeProbe(() => {
+const nativeEngine = new NativeEngineHost(() => {
   pushState();
 });
 const startedAt = Date.now();
@@ -90,7 +90,7 @@ function state(): AppState {
     settings: settings?.current ?? DEFAULT_SETTINGS,
     resumeOffer,
     appError,
-    nativeProbe: nativeProbe.current,
+    nativeEngine: nativeEngine.current,
   };
 }
 
@@ -203,6 +203,7 @@ async function placeOutput(reason: string): Promise<void> {
       targetDisplayId = null;
     }
     output.hide();
+    nativeEngine.retarget(undefined, reason);
     pushState();
     return;
   }
@@ -210,11 +211,13 @@ async function placeOutput(reason: string): Promise<void> {
   targetDisplayId = target.id;
   if (outputHiddenByUser) {
     output.hide();
+    nativeEngine.retarget(undefined, 'emergency hide');
     pushState();
     return;
   }
   log('info', `Placing Output on display ${target.id} "${target.label || 'unnamed'}" (${reason})`);
   await output.placeOn(target);
+  nativeEngine.retarget(target, reason);
   if (awaitingReplug && lastPlacement?.ok && lastPlacement.targetDisplayId === target.id) {
     awaitingReplug = false;
     hotplugRecoveries++;
@@ -279,6 +282,7 @@ function watchDisplays(): void {
     if (d.id === targetDisplayId) {
       // Hide immediately; don't wait for the debounce.
       output?.hide();
+      nativeEngine.retarget(undefined, 'projector unplugged');
       awaitingReplug = true;
       lostDisplayId = d.id;
       log('warn', 'Projector display was unplugged mid-session; Output hidden.');
@@ -395,6 +399,7 @@ function setOutputHidden(hidden: boolean, why = 'by presenter (emergency hide)')
   log(hidden ? 'warn' : 'info', hidden ? `Output hidden ${why}` : 'Output shown again');
   if (hidden) {
     output?.hide();
+    nativeEngine.retarget(undefined, 'emergency hide');
     pushState();
   } else {
     void placeOutput('presenter un-hid the Output');
@@ -647,11 +652,13 @@ function registerIpc(): void {
   handle('app:report-error', controlWc, (message) => {
     reportAppError('Control Panel error', message);
   });
-  handle('native:probe-start', controlWc, () => {
-    void nativeProbe.start(targetDisplayId !== null ? findDisplay(targetDisplayId) : undefined);
+  handle('native:start', controlWc, () => {
+    const target =
+      targetDisplayId !== null && !outputHiddenByUser ? findDisplay(targetDisplayId) : undefined;
+    void nativeEngine.start(target);
   });
-  handle('native:probe-stop', controlWc, async () => {
-    await nativeProbe.stop();
+  handle('native:stop', controlWc, async () => {
+    await nativeEngine.stop();
   });
   handle('app:dismiss-error', controlWc, () => {
     appError = null;
@@ -778,7 +785,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', () => {
-    nativeProbe.dispose();
+    nativeEngine.dispose();
     engine?.shutdown();
     persistSettings();
     settings?.flush();

@@ -4,7 +4,7 @@ import { localAction } from '@shared/controls';
 import { formatRect, isHdrDisplay, shortColorSpace, type DisplayInfo } from '@shared/displays';
 import { HARDWARE_CHECKS, passBlocker, type CheckId, type CheckResult } from './checklist';
 import { buildReport, placementSummary, type CheckRecord } from './report';
-import { NativeProbePanel } from './NativeProbePanel';
+import { NativeEnginePanel } from './NativeEnginePanel';
 import { NowProjecting } from './NowProjecting';
 import { SettingsPanel } from './SettingsPanel';
 import { SourcesPanel, useSources } from './SourcesPanel';
@@ -626,8 +626,8 @@ export function App() {
         {view === 'diagnostics' && (
           <>
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card title="Native engine (Phase 2 · P2.0 feasibility)">
-                <NativeProbePanel status={state.nativeProbe} />
+              <Card title="Native engine (Phase 2 · P2.1)">
+                <NativeEnginePanel status={state.nativeEngine} />
               </Card>
               <Card title="Output placement">
                 <PlacementCard p={state.placement} />

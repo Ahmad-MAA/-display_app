@@ -32,4 +32,18 @@ export default tseslint.config(
     rules: { '@typescript-eslint/no-invalid-void-type': 'off' },
   },
   { files: ['**/*.mjs'], ...tseslint.configs.disableTypeChecked },
+  {
+    // The dev host loader runs as CommonJS inside an installed ProjectorDesk (scripts/devhost.mjs).
+    files: ['scripts/devhost/*.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 );

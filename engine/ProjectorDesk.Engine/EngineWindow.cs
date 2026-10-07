@@ -17,12 +17,22 @@ internal sealed unsafe class EngineWindow
     /// <summary>WDA_EXCLUDEFROMCAPTURE (Windows 10 2004+): the window is left out of every capture.</summary>
     public const uint ExcludeFromCapture = 0x11;
 
+    /// <summary>Posted by other threads to run <see cref="OnAppMessage"/> on the window thread.</summary>
+    private const uint WmAppWork = PInvoke.WM_APP + 1;
+    private const nuint HeartbeatTimer = 1;
+
     private const string ClassName = "ProjectorDesk.Engine.Output";
     private static readonly HWND HwndTopmost = new(-1);
-    private static readonly HWND HwndTop = new(0);
+    private static readonly HWND HwndNoTopmost = new(-2);
 
     // Kept in a static field so the GC never collects the delegate Windows calls back into.
     private static readonly WNDPROC WndProcDelegate = WndProc;
+
+    /// <summary>Runs on the window thread after <see cref="PostWork"/>.</summary>
+    public static Action? OnAppMessage { get; set; }
+
+    /// <summary>Runs on the window thread every heartbeat interval (so a hung thread stops the beat).</summary>
+    public static Action? OnHeartbeat { get; set; }
 
     public HWND Handle { get; }
 
@@ -69,26 +79,42 @@ internal sealed unsafe class EngineWindow
         return new AffinityReport("WDA_EXCLUDEFROMCAPTURE (0x11)", actualText, verified);
     }
 
-    /// <summary>Shows the window over the target rectangle without activating it, then reads back where it ended up.</summary>
-    public PlacementResult ShowOn(PixelRect target, bool topmost)
+    /// <summary>
+    /// Shows the window over the monitor that contains <paramref name="requested"/>, using that
+    /// monitor's exact bounds, without activating it; then reads back where it ended up.
+    /// </summary>
+    public PlacementResult ShowOn(PixelRect requested, bool topmost)
     {
-        var ok = PInvoke.SetWindowPos(Handle, topmost ? HwndTopmost : HwndTop, target.X, target.Y, target.Width, target.Height,
+        var want = new RECT { left = requested.X, top = requested.Y, right = requested.X + requested.Width, bottom = requested.Y + requested.Height };
+        var target = MonitorRect(PInvoke.MonitorFromRect(want, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST));
+
+        var ok = PInvoke.SetWindowPos(Handle, topmost ? HwndTopmost : HwndNoTopmost, target.X, target.Y, target.Width, target.Height,
             SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         if (!ok)
             throw new Win32Exception("SetWindowPos");
 
         if (!PInvoke.GetWindowRect(Handle, out var r))
             throw new Win32Exception("GetWindowRect");
-        var monitor = PInvoke.MonitorFromWindow(Handle, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+        var monitor = MonitorRect(PInvoke.MonitorFromWindow(Handle, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST));
+        return Placement.Evaluate(requested, new PixelRect(r.left, r.top, r.right - r.left, r.bottom - r.top), monitor);
+    }
+
+    public void Hide() => PInvoke.ShowWindow(Handle, SHOW_WINDOW_CMD.SW_HIDE);
+
+    public void PostWork() => PInvoke.PostMessage(Handle, WmAppWork, default, default);
+
+    public void StartHeartbeat(uint intervalMs) => PInvoke.SetTimer(Handle, HeartbeatTimer, intervalMs, null);
+
+    public void RequestClose() => PInvoke.PostMessage(Handle, PInvoke.WM_CLOSE, default, default);
+
+    private static PixelRect MonitorRect(HMONITOR monitor)
+    {
         var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
         if (!PInvoke.GetMonitorInfo(monitor, ref info))
             throw new Win32Exception("GetMonitorInfo");
         var m = info.rcMonitor;
-        return Placement.Evaluate(target, new PixelRect(r.left, r.top, r.right - r.left, r.bottom - r.top),
-            new PixelRect(m.left, m.top, m.right - m.left, m.bottom - m.top));
+        return new PixelRect(m.left, m.top, m.right - m.left, m.bottom - m.top);
     }
-
-    public void RequestClose() => PInvoke.PostMessage(Handle, PInvoke.WM_CLOSE, default, default);
 
     /// <summary>Standard message loop; returns when the window has been destroyed.</summary>
     public static void RunMessageLoop()
@@ -104,8 +130,14 @@ internal sealed unsafe class EngineWindow
     {
         switch (msg)
         {
+            case WmAppWork:
+                OnAppMessage?.Invoke();
+                return new LRESULT(0);
+            case PInvoke.WM_TIMER when wParam.Value == HeartbeatTimer:
+                OnHeartbeat?.Invoke();
+                return new LRESULT(0);
             case PInvoke.WM_DPICHANGED:
-                // The placement is ours (the target display's exact bounds); ignore the rect
+                // The placement is ours (the target monitor's exact bounds); ignore the rect
                 // Windows suggests when the window lands on a monitor with another scale.
                 return new LRESULT(0);
             case PInvoke.WM_DESTROY:
